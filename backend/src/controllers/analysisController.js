@@ -6,12 +6,44 @@ const { buildSkillGap } = require("../services/skillGapService");
 const { computeReadiness, gamificationFromScore } = require("../services/readinessService");
 const { generateRoadmap } = require("../services/roadmapService");
 const { simulateFutureReadiness } = require("../services/simulatorService");
-const { getExplainableFeedback } = require("../services/aiService");
+const { getExplainableFeedback, generateQuestions } = require("../services/aiService");
+const { analyzeReadinessForRole, ROLE_SKILLS } = require("../services/readinessAnalysisService");
 
 const ROLE_SKILL_MAP = {
-  "Data Analyst": ["sql", "python", "data analysis", "excel", "power bi"],
-  "Web Dev": ["javascript", "react", "next.js", "node.js", "mongodb"],
-  "ML Engineer": ["python", "machine learning", "deep learning", "numpy", "scikit-learn"],
+  "SDE Intern": ["javascript", "typescript", "node.js", "data structures", "algorithms"],
+  "Frontend Developer Intern": ["javascript", "typescript", "react", "next.js", "css"],
+  "Backend Developer Intern": ["node.js", "express", "mongodb", "sql", "api testing"],
+  "Data Analyst Intern": ["python", "sql", "data analysis", "excel", "power bi"],
+  "QA Engineer Intern": ["testing", "automation", "selenium", "postman", "api testing"],
+  "Full Stack Intern": ["javascript", "react", "node.js", "mongodb", "rest api"],
+};
+
+const SKILL_ALIASES = {
+  javascript: ["javascript", "js", "ecmascript"],
+  typescript: ["typescript", "ts"],
+  "node.js": ["node.js", "nodejs", "node"],
+  "data structures": ["data structures", "data structure", "dsa"],
+  algorithms: ["algorithms", "algorithm"],
+  react: ["react", "reactjs", "react.js"],
+  "next.js": ["next.js", "nextjs", "next"],
+  css: ["css", "tailwind", "bootstrap"],
+  testing: ["testing", "test automation", "unit testing", "integration testing", "qa"],
+  automation: ["automation", "automated testing", "test automation"],
+  selenium: ["selenium"],
+  postman: ["postman"],
+  "api testing": ["api testing", "rest api", "api"],
+};
+
+const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const hasSkillMatch = ({ requiredSkill, userSkills, resumeText }) => {
+  const variants = SKILL_ALIASES[requiredSkill] || [requiredSkill];
+  return variants.some((variant) => {
+    const normalized = variant.toLowerCase().trim();
+    if (userSkills.has(normalized)) return true;
+    const pattern = new RegExp(`\\b${escapeRegex(normalized)}\\b`, "i");
+    return pattern.test(resumeText);
+  });
 };
 
 const getLatestAnalysis = async (userId) => {
@@ -164,13 +196,80 @@ const getFitHeatmap = async (req, res) => {
   const user = await User.findById(req.user.userId);
   if (!user) return res.status(404).json({ message: "User not found" });
 
+  const normalizedUserSkills = new Set(
+    (user.resumeSkills || []).map((skill) => String(skill).trim().toLowerCase())
+  );
+  const normalizedResumeText = String(user.resumeText || "").toLowerCase();
+  const hasResumeData = Boolean(normalizedResumeText.trim()) && normalizedUserSkills.size > 0;
+
+  if (!hasResumeData) {
+    return res.json({
+      needsResumeUpload: true,
+      message: "Upload your resume in Resume Analysis first to unlock role comparison.",
+      roleFit: [],
+    });
+  }
+
   const roleFit = Object.entries(ROLE_SKILL_MAP).map(([role, skills]) => {
-    const matched = skills.filter((s) => user.resumeSkills.includes(s)).length;
+    const matched = skills.filter((skill) =>
+      hasSkillMatch({
+        requiredSkill: skill,
+        userSkills: normalizedUserSkills,
+        resumeText: normalizedResumeText,
+      })
+    ).length;
     const fit = Math.round((matched / skills.length) * 100);
     return { role, fit };
   });
 
-  return res.json({ roleFit });
+  return res.json({
+    needsResumeUpload: false,
+    extractedSkills: [...normalizedUserSkills],
+    roleFit,
+  });
+};
+
+const analyzeReadiness = async (req, res) => {
+  try {
+    const { resumeText = "", selectedRole = "" } = req.body || {};
+    if (!resumeText || typeof resumeText !== "string") {
+      return res.status(400).json({ message: "resumeText is required" });
+    }
+
+    if (!selectedRole || typeof selectedRole !== "string") {
+      return res.status(400).json({ message: "selectedRole is required" });
+    }
+
+    if (!ROLE_SKILLS[selectedRole]) {
+      return res.status(400).json({
+        message: "Unsupported role selected",
+        supportedRoles: Object.keys(ROLE_SKILLS),
+      });
+    }
+
+    const result = analyzeReadinessForRole({ resumeText, selectedRole });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Readiness analysis failed" });
+  }
+};
+
+const generateQuestionsForRole = async (req, res) => {
+  try {
+    const { role, skills = [] } = req.body || {};
+    if (!role || typeof role !== "string") {
+      return res.status(400).json({ message: "Role is required" });
+    }
+
+    const normalizedSkills = Array.isArray(skills)
+      ? skills.map((skill) => String(skill).trim()).filter(Boolean).slice(0, 30)
+      : [];
+
+    const questions = await generateQuestions(role, normalizedSkills);
+    return res.json({ role, questions });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to generate questions" });
+  }
 };
 
 const resumeOptimizer = async (req, res) => {
@@ -228,6 +327,8 @@ module.exports = {
   getRoadmap,
   simulateFuture,
   getFitHeatmap,
+  analyzeReadiness,
+  generateQuestionsForRole,
   resumeOptimizer,
   extensionAnalyze,
 };
