@@ -115,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Target className="h-5 w-5 text-indigo-300" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-white">SkillBridge AI</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-white">SkillSync</h1>
               <p className="text-xs text-slate-400">Your Career Co-Pilot</p>
             </div>
           </div>

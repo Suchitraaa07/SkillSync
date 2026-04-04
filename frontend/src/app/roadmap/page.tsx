@@ -1,48 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card } from "@/components/Card";
-import { api } from "@/lib/api";
-
-type RoadmapItem = {
-  week: number;
-  focusSkill: string;
-  project: string;
-  resources: string[];
-};
+import { Roadmap } from "@/components/Roadmap";
+import { RoleSelector } from "@/components/RoleSelector";
+import { convertToFlow } from "@/utils/convertRoadmap";
+import { getRoadmapDataForRole, getRoadmapFileForRole, getRoleLabel } from "@/utils/roadmapRoleMap";
 
 export default function RoadmapPage() {
-  const [roadmap, setRoadmap] = useState<RoadmapItem[]>([]);
-  const [status, setStatus] = useState("");
-
-  useEffect(() => {
-    api
-      .get<{ roadmap: RoadmapItem[] }>("/roadmap")
-      .then((res) => setRoadmap(res.data.roadmap))
-      .catch(() => setStatus("No roadmap yet. Analyze a job first."));
-  }, []);
+  const [selectedRole, setSelectedRole] = useState("frontend");
+  const selectedRoadmap = useMemo(() => getRoadmapDataForRole(selectedRole), [selectedRole]);
+  const selectedFileName = useMemo(() => getRoadmapFileForRole(selectedRole), [selectedRole]);
+  const selectedRoleLabel = useMemo(() => getRoleLabel(selectedRole), [selectedRole]);
+  const { nodes, edges } = useMemo(() => convertToFlow(selectedRoadmap), [selectedRoadmap]);
 
   return (
     <AuthGuard>
       <AppShell>
-        <Card title="Personalized Weekly Learning Roadmap">
+        <Card title="Interactive Learning Roadmap">
           <div className="space-y-4">
-            {roadmap.map((item) => (
-              <article key={item.week} className="rounded-xl border bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Week {item.week}</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-900">{item.focusSkill}</h3>
-                <p className="mt-1 text-sm text-slate-700">Project: {item.project}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {item.resources.map((resource) => (
-                    <span key={resource} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{resource}</span>
-                  ))}
-                </div>
-              </article>
-            ))}
+            <RoleSelector value={selectedRole} onChange={setSelectedRole} />
+            <Roadmap nodes={nodes} edges={edges} roleLabel={selectedRoleLabel} />
+            <p className="text-xs text-slate-400">
+              Source: <span className="font-medium text-slate-300">{selectedFileName}</span> | structured roadmap view | scroll to explore
+            </p>
           </div>
-          {status ? <p className="mt-4 text-sm text-slate-600">{status}</p> : null}
         </Card>
       </AppShell>
     </AuthGuard>
