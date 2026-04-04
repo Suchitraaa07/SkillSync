@@ -17,6 +17,12 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     setReady(true);
   }, [router]);
 
-  if (!ready) return <div className="p-8 text-slate-600">Loading...</div>;
+  if (!ready) {
+    return (
+      <div suppressHydrationWarning className="p-8 text-slate-600">
+        Loading...
+      </div>
+    );
+  }
   return <>{children}</>;
 }
