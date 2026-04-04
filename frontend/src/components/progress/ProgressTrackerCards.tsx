@@ -135,7 +135,7 @@ export function ProgressTrackerCards({ githubData, leetCodeData }: ProgressTrack
         trend={githubMetrics.contributions30d}
         trendSummary={githubTrendSummary}
         stats={[
-          { label: "Total Repositories", value: String(githubMetrics.totalRepositories) },
+          { label: "Public Repositories", value: String(githubMetrics.totalRepositories) },
           { label: "Total Commits (Last 30 Days)", value: String(githubMetrics.commits30d) },
           { label: "Longest Streak", value: `${githubMetrics.longestStreak} days` },
           { label: "Profile Strength Score", value: `${githubGrowthScore}/100` },

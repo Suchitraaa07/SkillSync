@@ -13,11 +13,8 @@ import {
   Map,
   Settings,
   Shield,
-<<<<<<< HEAD
-=======
   Sparkles,
   TrendingUp,
->>>>>>> 588573b (Saving work before syncing)
   Target,
   UserCircle2,
   X,

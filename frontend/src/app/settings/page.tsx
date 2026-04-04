@@ -107,6 +107,13 @@ const defaultNotifications: NotificationsState = {
 };
 
 const LOCAL_SETTINGS_KEY = "skillsync_settings_v1";
+const LOCAL_PROFILES_KEY = "skillsync_profiles";
+
+const normalizeProfileUrl = (value: string) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
 
 const formatSyncTime = (value: string | null) => {
   if (!value) return "Never synced";
@@ -168,16 +175,14 @@ export default function SettingsPage() {
 
     localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(snapshot));
 
-    const existingProfilesRaw = localStorage.getItem("skillsync_profiles");
+    const existingProfilesRaw = localStorage.getItem(LOCAL_PROFILES_KEY);
     const existingProfiles = existingProfilesRaw ? JSON.parse(existingProfilesRaw) : {};
-    localStorage.setItem(
-      "skillsync_profiles",
-      JSON.stringify({
-        ...existingProfiles,
-        github: snapshot.platforms.github.username,
-        leetcode: snapshot.platforms.leetcode.username,
-      })
-    );
+    const nextProfiles = {
+      ...existingProfiles,
+      github: normalizeProfileUrl(snapshot.platforms.github.username || ""),
+      leetcode: normalizeProfileUrl(snapshot.platforms.leetcode.username || ""),
+    };
+    localStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(nextProfiles));
 
     localStorage.setItem(
       "skillsync_preferences",
@@ -200,7 +205,7 @@ export default function SettingsPage() {
       }
 
       const user = authStore.getUser<{ name?: string; email?: string }>() || {};
-      const profilesRaw = localStorage.getItem("skillsync_profiles");
+      const profilesRaw = localStorage.getItem(LOCAL_PROFILES_KEY);
       const prefsRaw = localStorage.getItem("skillsync_preferences");
       const profiles = profilesRaw ? JSON.parse(profilesRaw) : {};
       const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
@@ -214,12 +219,12 @@ export default function SettingsPage() {
         },
         platforms: {
           github: {
-            username: profiles.github || "",
+            username: normalizeProfileUrl(profiles.github || ""),
             connected: Boolean(profiles.github),
             lastSynced: null,
           },
           leetcode: {
-            username: profiles.leetcode || "",
+            username: normalizeProfileUrl(profiles.leetcode || ""),
             connected: Boolean(profiles.leetcode),
             lastSynced: null,
           },
@@ -275,6 +280,55 @@ export default function SettingsPage() {
     } finally {
       setSavingAction("");
     }
+  };
+
+  const readStoredProfiles = () => {
+    if (typeof window === "undefined") {
+      return { linkedin: "", github: "", leetcode: "", updatedAt: null as string | null };
+    }
+    const raw = localStorage.getItem(LOCAL_PROFILES_KEY);
+    if (!raw) return { linkedin: "", github: "", leetcode: "", updatedAt: null as string | null };
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        linkedin: normalizeProfileUrl(parsed.linkedin || ""),
+        github: normalizeProfileUrl(parsed.github || ""),
+        leetcode: normalizeProfileUrl(parsed.leetcode || ""),
+        updatedAt: parsed.updatedAt || null,
+      };
+    } catch {
+      return { linkedin: "", github: "", leetcode: "", updatedAt: null as string | null };
+    }
+  };
+
+  const persistAndBroadcastProfiles = (profiles: { linkedin: string; github: string; leetcode: string }) => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(
+      LOCAL_PROFILES_KEY,
+      JSON.stringify({
+        ...profiles,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    window.dispatchEvent(new Event("skillsync:profiles-updated"));
+  };
+
+  const syncProfileLinks = async (next: Partial<{ linkedin: string; github: string; leetcode: string }>) => {
+    const current = readStoredProfiles();
+    const payload = {
+      linkedin: normalizeProfileUrl(next.linkedin ?? current.linkedin),
+      github: normalizeProfileUrl(next.github ?? current.github),
+      leetcode: normalizeProfileUrl(next.leetcode ?? current.leetcode),
+    };
+
+    try {
+      await api.patch("/api/auth/profiles", payload);
+    } catch {
+      // Keep local fallback behavior when backend is unavailable.
+    }
+
+    persistAndBroadcastProfiles(payload);
+    return payload;
   };
 
   const onSaveAccount = async (event: FormEvent) => {
@@ -334,24 +388,15 @@ export default function SettingsPage() {
 
   const onSyncGithub = async () => {
     await runAction("sync-github", async () => {
+      const normalizedGithub = normalizeProfileUrl(githubInput);
+      const mergedProfiles = await syncProfileLinks({ github: normalizedGithub });
       let nextGithub = {
         ...platforms.github,
-        username: githubInput.trim(),
-        connected: Boolean(githubInput.trim()),
+        username: mergedProfiles.github,
+        connected: Boolean(mergedProfiles.github),
         lastSynced: new Date().toISOString(),
       };
-      let message = "GitHub synced";
-
-      try {
-        const { data } = await api.post("/api/settings/sync/github", { username: githubInput.trim() });
-        nextGithub = {
-          ...nextGithub,
-          ...(data?.github || {}),
-        };
-        message = data?.message || message;
-      } catch {
-        message = "GitHub synced locally";
-      }
+      const message = mergedProfiles.github ? "GitHub profile link synced" : "GitHub disconnected";
 
       setPlatforms((prev) => ({ ...prev, github: nextGithub }));
       setGithubInput(nextGithub.username || "");
@@ -367,16 +412,12 @@ export default function SettingsPage() {
 
   const onDisconnectGithub = async () => {
     await runAction("disconnect-github", async () => {
+      await syncProfileLinks({ github: "" });
       const disconnected = {
         username: "",
         connected: false,
         lastSynced: null,
       };
-      try {
-        await api.delete("/api/settings/disconnect/github");
-      } catch {
-        // local fallback mode
-      }
 
       setPlatforms((prev) => ({ ...prev, github: disconnected }));
       setGithubInput("");
@@ -392,26 +433,15 @@ export default function SettingsPage() {
 
   const onVerifyLeetcode = async () => {
     await runAction("verify-leetcode", async () => {
+      const normalizedLeetcode = normalizeProfileUrl(leetCodeInput);
+      const mergedProfiles = await syncProfileLinks({ leetcode: normalizedLeetcode });
       let nextLeetcode = {
         ...platforms.leetcode,
-        username: leetCodeInput.trim(),
-        connected: Boolean(leetCodeInput.trim()),
+        username: mergedProfiles.leetcode,
+        connected: Boolean(mergedProfiles.leetcode),
         lastSynced: new Date().toISOString(),
       };
-      let message = "LeetCode verified";
-
-      try {
-        const { data } = await api.post("/api/settings/sync/leetcode", {
-          username: leetCodeInput.trim(),
-        });
-        nextLeetcode = {
-          ...nextLeetcode,
-          ...(data?.leetcode || {}),
-        };
-        message = data?.message || message;
-      } catch {
-        message = "LeetCode saved locally";
-      }
+      const message = mergedProfiles.leetcode ? "LeetCode profile link synced" : "LeetCode disconnected";
 
       setPlatforms((prev) => ({ ...prev, leetcode: nextLeetcode }));
       setLeetCodeInput(nextLeetcode.username || "");
@@ -427,16 +457,12 @@ export default function SettingsPage() {
 
   const onDisconnectLeetcode = async () => {
     await runAction("disconnect-leetcode", async () => {
+      await syncProfileLinks({ leetcode: "" });
       const disconnected = {
         username: "",
         connected: false,
         lastSynced: null,
       };
-      try {
-        await api.delete("/api/settings/disconnect/leetcode");
-      } catch {
-        // local fallback mode
-      }
 
       setPlatforms((prev) => ({ ...prev, leetcode: disconnected }));
       setLeetCodeInput("");
@@ -476,7 +502,7 @@ export default function SettingsPage() {
       }
       if (typeof window !== "undefined") {
         localStorage.removeItem(LOCAL_SETTINGS_KEY);
-        localStorage.removeItem("skillsync_profiles");
+        localStorage.removeItem(LOCAL_PROFILES_KEY);
         localStorage.removeItem("skillsync_preferences");
       }
       authStore.logout();
@@ -586,13 +612,13 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">
-                  Username: {platforms.github.username || "Not connected"}
+                  Profile URL: {platforms.github.username || "Not connected"}
                 </p>
                 <p className="text-xs text-slate-500">Last synced: {formatSyncTime(platforms.github.lastSynced)}</p>
                 <input
                   value={githubInput}
                   onChange={(e) => setGithubInput(e.target.value)}
-                  placeholder="GitHub username"
+                  placeholder="GitHub profile URL"
                   className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
                 />
                 <div className="mt-2 flex gap-2">
@@ -624,13 +650,13 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">
-                  Username: {platforms.leetcode.username || "Not connected"}
+                  Profile URL: {platforms.leetcode.username || "Not connected"}
                 </p>
                 <p className="text-xs text-slate-500">Last synced: {formatSyncTime(platforms.leetcode.lastSynced)}</p>
                 <input
                   value={leetCodeInput}
                   onChange={(e) => setLeetCodeInput(e.target.value)}
-                  placeholder="LeetCode username"
+                  placeholder="LeetCode profile URL"
                   className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
                 />
                 <div className="mt-2 flex gap-2">

@@ -17,6 +17,39 @@ const parseUsernameFromUrl = (url) => {
   }
 };
 
+const parseGithubUsernameFromUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (!/github\.com$/i.test(parsed.hostname)) return "";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (!parts.length) return "";
+
+    // Accept both profile URLs and accidentally pasted repo URLs.
+    // Examples:
+    // - /torvalds -> torvalds
+    // - /torvalds/linux -> torvalds
+    // - /users/torvalds -> torvalds
+    if (parts[0].toLowerCase() === "users" && parts[1]) return parts[1];
+    return parts[0];
+  } catch {
+    return "";
+  }
+};
+
+const parseLinkedInUsernameFromUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (!/linkedin\.com$/i.test(parsed.hostname)) return "";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length < 2) return "";
+    const section = parts[0].toLowerCase();
+    if (section !== "in" && section !== "pub") return "";
+    return parts[1] || "";
+  } catch {
+    return "";
+  }
+};
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 const toISODate = (date) => date.toISOString().slice(0, 10);
@@ -110,7 +143,7 @@ const fetchGithub = async (url) => {
     return { connected: false, username: "", stats: null, message: "GitHub not connected" };
   }
 
-  const username = parseUsernameFromUrl(url);
+  const username = parseGithubUsernameFromUrl(url) || parseUsernameFromUrl(url);
   if (!username) {
     return { connected: true, username: "", stats: null, message: "Invalid GitHub URL" };
   }
@@ -303,9 +336,9 @@ const fetchLinkedIn = async (url) => {
     return { connected: false, username: "", stats: null, message: "LinkedIn not connected" };
   }
 
-  const username = parseUsernameFromUrl(url);
+  const username = parseLinkedInUsernameFromUrl(url);
   if (!username) {
-    return { connected: true, username: "", stats: null, message: "Invalid LinkedIn URL" };
+    return { connected: false, username: "", stats: null, message: "Invalid LinkedIn URL" };
   }
 
   // LinkedIn does not provide open public profile APIs for this use case.
@@ -318,6 +351,7 @@ const fetchLinkedIn = async (url) => {
 };
 
 const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 }) => {
+  console.log("INPUT URLS:", { linkedin, github, leetcode });
   const normalized = {
     linkedin: normalizeUrl(linkedin),
     github: normalizeUrl(github),
@@ -329,11 +363,15 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
     fetchGithub(normalized.github),
     fetchLeetCode(normalized.leetcode),
   ]);
+  console.log("GITHUB DATA:", githubData);
+  console.log("LEETCODE DATA:", leetcodeData);
 
-  const connectedCount = [normalized.linkedin, normalized.github, normalized.leetcode].filter(Boolean).length;
+  const connectedCount = [linkedinData.connected, githubData.connected, leetcodeData.connected].filter(Boolean).length;
 
   const githubRepos = githubData.stats?.publicRepos || 0;
   const githubStars = githubData.stats?.totalStars || 0;
+  const githubFollowers = githubData.stats?.followers || 0;
+  const githubRecentCommits = githubData.stats?.totalCommits30d || 0;
   const lcSolved = leetcodeData.stats?.solved || 0;
   const lcMedium = leetcodeData.stats?.mediumSolved || 0;
 
@@ -354,11 +392,28 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
     insights.push("Connect all profiles for richer multi-platform analysis.");
   }
 
-  const githubSignal = clamp(35 + githubRepos * 3 + Math.min(20, githubStars), 20, 95);
-  const lcSignal = leetcodeData.stats
-    ? clamp(25 + lcSolved * 0.22 + lcMedium * 0.28 + (leetcodeData.stats.ranking > 0 ? 15 : 0), 18, 97)
+  const githubRepoScore = Math.min(40, githubRepos * 4);
+  const githubStarScore = Math.min(30, Math.log10(githubStars + 1) * 10);
+  const githubFollowerScore = Math.min(15, Math.log10(githubFollowers + 1) * 6);
+  const githubRecentScore = Math.min(10, githubRecentCommits * 0.5);
+  const githubSignal = normalized.github
+    ? githubData.stats
+      ? clamp(
+          5 + githubRepoScore + githubStarScore + githubFollowerScore + githubRecentScore,
+          6,
+          95
+        )
+      : 8
     : 0;
-  const linkedinSignal = normalized.linkedin ? 58 : 0;
+  const lcRankingBonus =
+    leetcodeData.stats?.ranking > 0 && leetcodeData.stats.ranking <= 200000 ? 12 : 0;
+  const lcBase = lcSolved > 0 ? 18 : 6;
+  const lcSignal = normalized.leetcode
+    ? leetcodeData.stats
+      ? clamp(lcBase + lcSolved * 0.18 + lcMedium * 0.22 + lcRankingBonus, 6, 97)
+      : 6
+    : 0;
+  const linkedinSignal = linkedinData.connected ? 58 : 0;
 
   const activeSignals = [githubSignal, lcSignal, linkedinSignal].filter((n) => n > 0);
   const avgSignal = activeSignals.length
@@ -417,3 +472,4 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
 };
 
 module.exports = { analyzeProfiles, normalizeUrl };
+

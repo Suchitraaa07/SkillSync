@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState, type ComponentType } from "react";
 import {
-  ArrowRight,
   BookOpen,
   BriefcaseBusiness,
   ChartNoAxesColumn,
@@ -18,8 +17,6 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card } from "@/components/Card";
-import { ReadinessScore } from "@/components/ReadinessScore";
-import { SkillGapDetection } from "@/components/SkillGapDetection";
 import { api } from "@/lib/api";
 import { computeProfileSignals, type ConnectedProfiles } from "@/lib/profileIntelligence";
 
@@ -303,74 +300,78 @@ export default function DashboardPage() {
   const strengths = profileIntel?.crossPlatform?.strengths ?? profileSignals.strengths;
   const githubStats = profileIntel?.providers?.github?.stats;
   const leetcodeStats = profileIntel?.providers?.leetcode?.stats;
+  const formatMetric = (value: number | null | undefined) =>
+    value === null || value === undefined ? "-" : Number(value).toLocaleString("en-US");
+  const providerGithubMessage = profileIntel?.providers?.github?.message || "GitHub status unavailable";
+  const providerLeetcodeMessage = profileIntel?.providers?.leetcode?.message || "LeetCode status unavailable";
+  const providerLinkedinMessage = profileIntel?.providers?.linkedin?.message || "LinkedIn status unavailable";
 
   return (
     <AuthGuard>
       <AppShell>
-        <section className="space-y-3">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-300">
+        <section className="space-y-2">
+          <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-indigo-300">
             <Sparkles className="h-4 w-4" />
             Highlight Features
           </p>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="overflow-hidden">
+          <div className="grid items-start gap-2 xl:grid-cols-2">
+            <Card className="overflow-hidden border-slate-600/90 bg-[linear-gradient(140deg,rgba(23,37,84,0.38),rgba(8,14,28,0.96))]">
               <div className="relative">
-                <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-indigo-500/20 blur-2xl" />
-                <div className="flex items-center justify-between gap-2">
-                  <p className="mb-1 text-2xl font-semibold text-white">Cross-Platform Intelligence</p>
-                  <span className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-100">
+                <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-cyan-500/15 blur-2xl" />
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="mb-1 text-3xl font-semibold text-white">Cross-Platform Intelligence</p>
+                    <p className="text-sm uppercase tracking-[0.16em] text-cyan-200/90">Signal Quality Panel</p>
+                  </div>
+                  <span className="rounded-full border border-cyan-300/30 bg-cyan-400/15 px-3 py-1 text-xs font-semibold text-cyan-100">
                     {connectedCount}/3 connected
                   </span>
                 </div>
-                <p className="max-w-2xl text-sm text-slate-300">
+                <p className="mt-2 max-w-2xl text-base leading-relaxed text-slate-300">
                   Live dashboard from your connected profile links. Signals update after each Connect Profiles save.
                 </p>
 
-                <div className="mt-4 grid gap-3 rounded-2xl border border-slate-700 bg-slate-950/55 p-3">
+                <div className="mt-2 grid gap-2 rounded-2xl border border-slate-700/90 bg-slate-950/65 p-4">
                   <SignalRow label="LinkedIn presence" value={strengths.linkedin} icon={Globe} tone="blue" />
                   <SignalRow label="GitHub proof of work" value={strengths.github} icon={GitBranch} tone="emerald" />
                   <SignalRow label="LeetCode consistency" value={strengths.leetcode} icon={Code2} tone="amber" />
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl border border-slate-700 bg-slate-900/65 p-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">GitHub</p>
-                    <p className="mt-1 text-sm text-slate-200">Repos: {githubStats?.publicRepos ?? "-"}</p>
-                    <p className="text-sm text-slate-200">Stars: {githubStats?.totalStars ?? "-"}</p>
-                    <p className="text-sm text-slate-200">Followers: {githubStats?.followers ?? "-"}</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">GitHub Metrics</p>
+                    <p className="mt-1 text-base text-slate-100">Public Repos: {formatMetric(githubStats?.publicRepos)}</p>
+                    <p className="text-base text-slate-300">Stars: {formatMetric(githubStats?.totalStars)}</p>
+                    <p className="text-base text-slate-300">Followers: {formatMetric(githubStats?.followers)}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-700 bg-slate-900/65 p-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">LeetCode</p>
-                    <p className="mt-1 text-sm text-slate-200">Solved: {leetcodeStats?.solved ?? "-"}</p>
-                    <p className="text-sm text-slate-200">Medium: {leetcodeStats?.mediumSolved ?? "-"}</p>
-                    <p className="text-sm text-slate-200">Ranking: {leetcodeStats?.ranking ?? "-"}</p>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">LeetCode Metrics</p>
+                    <p className="mt-1 text-base text-slate-100">Solved: {formatMetric(leetcodeStats?.solved)}</p>
+                    <p className="text-base text-slate-300">Medium: {formatMetric(leetcodeStats?.mediumSolved)}</p>
+                    <p className="text-base text-slate-300">Ranking: {formatMetric(leetcodeStats?.ranking)}</p>
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-2">
-                  {displayInsights.slice(0, 3).map((item) => (
-                    <div key={item} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
-                      {item}
-                    </div>
-                  ))}
+                <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/55 p-3 text-sm text-slate-300">
+                  <p className="font-semibold uppercase tracking-[0.13em] text-slate-400">Provider Status</p>
+                  <p className="mt-1">GitHub: {providerGithubMessage}</p>
+                  <p>LeetCode: {providerLeetcodeMessage}</p>
+                  <p>LinkedIn: {providerLinkedinMessage}</p>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">
-                  {profileIntel ? `Live: ${profileIntel.providers.github.message} | ${profileIntel.providers.leetcode.message}` : "Live analysis unavailable. Showing local estimate."}
-                </p>
               </div>
             </Card>
 
-            <Card>
+            <Card className="border-slate-600/90 bg-[linear-gradient(140deg,rgba(12,35,66,0.25),rgba(8,14,28,0.96))]">
               <div className="flex items-center justify-between gap-2">
-                <p className="mb-1 text-2xl font-semibold text-white">Smart Peer Benchmarking</p>
+                <p className="mb-1 text-3xl font-semibold text-white">Smart Peer Benchmarking</p>
                 <ChartNoAxesColumn className="h-5 w-5 text-indigo-300" />
               </div>
-              <p className="text-sm text-slate-300">
+              <p className="text-base leading-relaxed text-slate-300">
                 Benchmark view generated from your real profile metrics + readiness history.
               </p>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <KpiChip label="Peer Rank" value={`Top ${topPercentile}%`} tone="amber" />
                 <KpiChip
                   label="DSA Cohort"
@@ -380,19 +381,19 @@ export default function DashboardPage() {
                 <KpiChip label="Shortlist Chance" value={`${shortlistChance}%`} tone="cyan" />
               </div>
 
-              <div className="mt-4 space-y-2 rounded-2xl border border-slate-700 bg-slate-950/55 p-3">
+              <div className="mt-2 space-y-1.5 rounded-2xl border border-slate-700/90 bg-slate-950/60 p-3">
                 <BenchRow label="Profile competitiveness" value={100 - topPercentile} />
                 <BenchRow label="Interview readiness" value={dsaPercentile ? 100 - dsaPercentile : 35} />
                 <BenchRow label="Recruiter shortlist probability" value={shortlistChance} />
               </div>
 
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="mt-2 text-sm text-slate-400">
                 {profileIntel?.generatedAt
                   ? `Last refreshed: ${new Date(profileIntel.generatedAt).toLocaleString()}`
                   : "Connect profiles to unlock live peer benchmarking refresh."}
               </p>
 
-              <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/65 px-3 py-2 text-xs text-slate-300">
+              <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm leading-relaxed text-slate-200">
                 {dsaPercentile
                   ? "Your coding profile is benchmarked with role-aligned internship peers."
                   : "Add a valid LeetCode profile URL to enable DSA percentile benchmarking."}
@@ -401,16 +402,16 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-2">
+        <section className="grid gap-2 xl:grid-cols-2">
           <Card className="overflow-hidden border-slate-700/80 bg-[linear-gradient(180deg,rgba(13,20,40,0.92),rgba(8,14,28,0.96))]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-semibold text-white">GitHub Growth</p>
-                <p className="text-sm text-slate-400">Repository & Contribution Activity</p>
+                <p className="text-3xl font-semibold text-white">GitHub Growth</p>
+                <p className="text-base text-slate-400">Repository & Contribution Activity</p>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-[260px_1fr]">
+            <div className="mt-2 grid gap-2 lg:grid-cols-[260px_1fr]">
               <ScoreDonut score={Math.round(profileIntel?.githubGrowth?.score || 0)} color="emerald" />
               <TrendLinePanel
                 series={profileIntel?.githubGrowth?.dailySeries || []}
@@ -420,8 +421,8 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <MiniStat label="Total Repositories" value={String(profileIntel?.githubGrowth?.totalRepositories || 0)} />
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <MiniStat label="Public Repositories" value={String(profileIntel?.githubGrowth?.totalRepositories || 0)} />
               <MiniStat label="Total Commits (Last 30 Days)" value={String(profileIntel?.githubGrowth?.totalCommits30d || 0)} />
               <MiniStat label="Longest Streak" value={`${profileIntel?.githubGrowth?.longestStreakDays || 0} days`} />
               <MiniStat label="Profile Strength Score" value={`${Math.round(profileIntel?.githubGrowth?.profileStrengthScore || 0)}/100`} />
@@ -431,12 +432,12 @@ export default function DashboardPage() {
           <Card className="overflow-hidden border-slate-700/80 bg-[linear-gradient(180deg,rgba(13,20,40,0.92),rgba(8,14,28,0.96))]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-semibold text-white">LeetCode Progress</p>
-                <p className="text-sm text-slate-400">Problem Solving Consistency</p>
+                <p className="text-3xl font-semibold text-white">LeetCode Progress</p>
+                <p className="text-base text-slate-400">Problem Solving Consistency</p>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-[260px_1fr]">
+            <div className="mt-2 grid gap-2 lg:grid-cols-[260px_1fr]">
               <ScoreDonut score={Math.round(profileIntel?.leetcodeProgress?.score || 0)} color="amber" />
               <TrendLinePanel
                 series={profileIntel?.leetcodeProgress?.dailySeries || []}
@@ -446,7 +447,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <MiniStat label="Total Problems Solved" value={String(profileIntel?.leetcodeProgress?.totalProblemsSolved || 0)} />
               <MiniStat
                 label="Easy / Medium / Hard"
@@ -458,9 +459,9 @@ export default function DashboardPage() {
           </Card>
         </section>
 
-        <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Core Features</p>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Core Features</p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <Card className="border-blue-400/25 bg-[linear-gradient(180deg,rgba(23,56,118,0.4),rgba(10,14,28,0.94))]">
               <FeatureTile title="Resume Analysis" desc="Analyze ATS score and suggest improvements" icon={BookOpen} href="/resume-optimizer" action="Analyze" />
             </Card>
@@ -479,111 +480,14 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-          <Card title="Analyze Readiness By Role">
-            <form onSubmit={onUploadResume} className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    Select Role
-                  </label>
-                  <select
-                    value={roleTitle}
-                    onChange={(e) => setRoleTitle(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-                  >
-                    {ROLE_OPTIONS.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    Upload Resume (PDF)
-                  </label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-3 file:py-1 file:text-cyan-100"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="rounded-xl border border-cyan-400/35 bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30"
-              >
-                Upload Resume & Analyze
-              </button>
-            </form>
-          </Card>
-
-          <Card title="Analysis Status">
-            <p className="text-sm text-slate-300">
-              {isAnalyzingReadiness
-                ? "Analyzing readiness and skill gaps..."
-                : readinessAnalysis
-                  ? `Role: ${roleTitle} · Score: ${readinessAnalysis.score}% · ${readinessAnalysis.readinessLevel}`
-                  : "Upload a resume and select a role to generate skill gap + readiness insights."}
-            </p>
-            <p className="mt-3 text-xs text-slate-500">
-              Resume text source: {resumeText ? "Extracted and available" : "Not available yet"}
-            </p>
-          </Card>
-        </section>
-
-        {readinessAnalysis ? (
-          <section className="grid gap-4 xl:grid-cols-2">
-            <SkillGapDetection
-              matchedSkills={readinessAnalysis.matchedSkills}
-              missingSkills={readinessAnalysis.missingSkills}
-              totalGaps={readinessAnalysis.totalGaps}
-            />
-            <ReadinessScore
-              score={readinessAnalysis.score}
-              readinessLevel={readinessAnalysis.readinessLevel}
-            />
-          </section>
-        ) : null}
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Overall Score" value={`${score}%`} hint={readiness?.readiness.category || "No score yet"} />
           <StatTile label="Skill Gaps" value={`${missingSkillEstimate}`} hint="High priority" />
           <StatTile label="To Internship Ready" value={`${weeksToReady} weeks`} hint="Keep going" />
           <StatTile label="Improvement" value={`+${monthlyImprovement}%`} hint="This month" />
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-3">
-          <Card title="Weighted Components" className="xl:col-span-1">
-            <div className="space-y-2 text-sm text-slate-300">
-              <p>
-                Skill Match (50%): <span className="font-semibold text-slate-100">{skillMatch}%</span>
-              </p>
-              <p>
-                Project Relevance (30%): <span className="font-semibold text-slate-100">{projectRelevance}%</span>
-              </p>
-              <p>
-                Experience (20%): <span className="font-semibold text-slate-100">{experienceScore}%</span>
-              </p>
-            </div>
-          </Card>
-          <Card title="AI Feedback" className="xl:col-span-2">
-            <p className="text-sm leading-relaxed text-slate-300">
-              {readiness?.readiness.explanation || "Run resume and job analysis to generate explainable readiness insights."}
-            </p>
-            <div className="mt-3">
-              <Link href="/interview-simulator" className="inline-flex items-center gap-2 text-sm font-medium text-indigo-300 hover:text-indigo-200">
-                Practice with interview simulator
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </Card>
-        </div>
-
-        {status ? <p className="rounded-xl border border-slate-700 bg-slate-900/90 px-4 py-2.5 text-sm text-slate-200">{status}</p> : null}
+        {status ? <p className="rounded-xl border border-slate-700 bg-slate-900/90 px-4 py-2.5 text-base text-slate-200">{status}</p> : null}
       </AppShell>
     </AuthGuard>
   );
@@ -608,7 +512,7 @@ function SignalRow({
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-slate-300">
+      <div className="mb-1 flex items-center justify-between text-sm text-slate-300">
         <span className="inline-flex items-center gap-1.5">
           <Icon className="h-3.5 w-3.5" />
           {label}
@@ -639,8 +543,8 @@ function KpiChip({
 
   return (
     <div className={`rounded-xl border px-3 py-2 ${styles[tone]}`}>
-      <p className="text-[11px] uppercase tracking-[0.12em] opacity-85">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
+      <p className="text-xs uppercase tracking-[0.12em] opacity-85">{label}</p>
+      <p className="mt-1 text-base font-semibold">{value}</p>
     </div>
   );
 }
@@ -650,7 +554,7 @@ function BenchRow({ label, value }: { label: string; value: number }) {
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-slate-300">
+      <div className="mb-1 flex items-center justify-between text-sm text-slate-300">
         <span>{label}</span>
         <span>{Math.round(width)}%</span>
       </div>
@@ -664,7 +568,7 @@ function BenchRow({ label, value }: { label: string; value: number }) {
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-700/90 bg-slate-900/65 px-3 py-3.5">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">{label}</p>
+      <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{label}</p>
       <p className="mt-1 text-[2rem] font-semibold leading-tight text-slate-100">{value}</p>
     </div>
   );
@@ -686,7 +590,7 @@ function ScoreDonut({ score, color }: { score: number; color: "emerald" | "amber
         />
         <div className="relative z-10 grid h-[146px] w-[146px] place-items-center rounded-full bg-slate-950 text-center">
           <p className={`text-5xl font-semibold ${textColor}`}>{safe}</p>
-          <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Out of 100</p>
+        <p className="text-sm uppercase tracking-[0.12em] text-slate-400">Out of 100</p>
         </div>
       </div>
     </div>
@@ -756,7 +660,7 @@ function TrendLinePanel({
   return (
     <div className="rounded-2xl border border-slate-700/90 bg-slate-950/55 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Last 30 days</p>
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">Last 30 days</p>
         <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${pillClass}`}>
           {`${momentum >= 0 ? "+" : ""}${momentum} ${metricLabel}`}
         </span>
@@ -846,8 +750,8 @@ function FeatureTile({
         <Icon className="h-5 w-5" />
       </div>
       <p className="text-xl font-semibold text-white">{title}</p>
-      <p className="mt-2 min-h-[52px] text-sm leading-relaxed text-slate-300">{desc}</p>
-      <Link href={href} className="mt-4 inline-flex rounded-xl border border-slate-400/30 bg-slate-900/50 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-800">
+      <p className="mt-1 min-h-[52px] text-base leading-relaxed text-slate-300">{desc}</p>
+      <Link href={href} className="mt-2 inline-flex rounded-xl border border-slate-400/30 bg-slate-900/50 px-3 py-1.5 text-base font-medium text-slate-100 transition hover:bg-slate-800">
         {action}
       </Link>
     </div>
@@ -858,8 +762,9 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint: 
   return (
     <div className="rounded-2xl border border-slate-700/65 bg-[linear-gradient(180deg,rgba(18,25,47,0.92),rgba(10,14,28,0.9))] p-4 shadow-[0_16px_45px_rgba(0,0,0,0.35)]">
       <p className="text-2xl font-semibold text-emerald-300">{value}</p>
-      <p className="mt-1 text-sm text-slate-200">{label}</p>
-      <p className="text-xs text-slate-500">{hint}</p>
+      <p className="mt-1 text-base text-slate-200">{label}</p>
+      <p className="text-sm text-slate-500">{hint}</p>
     </div>
   );
 }
+
