@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>SkillSync Assistant</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      width: 340px;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .wrap { padding: 14px; }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 10px rgba(2, 6, 23, 0.07);
+    }
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    #analyze { background: #0f172a; color: white; }
+    #autofill { background: #0f766e; color: white; }
+    input {
+      width: 100%;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+    }
+    .small { font-size: 12px; color: #475569; }
+    .metric { font-size: 24px; font-weight: 800; margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="small">Backend API URL</div>
+      <input id="apiUrl" placeholder="http://localhost:5000" />
+      <button id="saveApi">Save API URL</button>
+    </div>
+
+    <div class="card">
+      <div class="small">Fit Score</div>
+      <div id="score" class="metric">--</div>
+      <div id="recommendation" class="small">Analyze current job page</div>
+      <div id="missing" class="small"></div>
+      <button id="analyze">Analyze This Job</button>
+      <button id="autofill">Smart Autofill Fields</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

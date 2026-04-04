@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "SkillSync Smart Apply Assistant",
+  "version": "1.0.0",
+  "description": "Analyze internship fit and assist with job applications.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://internshala.com/*",
+    "http://localhost:5000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*", "https://internshala.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

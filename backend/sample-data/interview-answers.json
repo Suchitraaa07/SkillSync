@@ -1,0 +1,5 @@
+{
+  "role": "web dev",
+  "question": "How would you design a scalable REST API?",
+  "answer": "I would begin with resource-oriented routes, stateless auth using JWT, and pagination. Then I'd add caching for read-heavy endpoints and use database indexes. For scale, I'd separate services, introduce a queue for async jobs, and monitor latency with metrics dashboards."
+}
