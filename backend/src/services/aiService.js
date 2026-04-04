@@ -72,7 +72,111 @@ const generateInterviewFollowup = async ({ question, answer, score }) => {
   }
 };
 
+const getResumeOptimizationFromText = async ({ resumeText }) => {
+  const fallback = buildFallbackResumeOptimization(resumeText);
+  if (!process.env.OPENAI_API_KEY) return fallback;
+
+  try {
+    const trimmedText = (resumeText || "").slice(0, 14000);
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert resume reviewer. Return only valid JSON with fields: summary (string), lacking (string[]), improvements (string[]), optimized_resume_markdown (string). Keep arrays concise and practical for early-career candidates.",
+          },
+          {
+            role: "user",
+            content: `Analyze this resume text and provide what is lacking, how to improve, and a stronger optimized resume draft:\n\n${trimmedText}`,
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const raw = response.data.choices?.[0]?.message?.content?.trim() || "";
+    const parsed = safeParseJson(raw);
+    if (!parsed) return fallback;
+
+    return {
+      summary: parsed.summary || fallback.summary,
+      lacking: normalizeStringArray(parsed.lacking, fallback.lacking),
+      improvements: normalizeStringArray(parsed.improvements, fallback.improvements),
+      optimizedResumeMarkdown:
+        typeof parsed.optimized_resume_markdown === "string" && parsed.optimized_resume_markdown.trim()
+          ? parsed.optimized_resume_markdown.trim()
+          : fallback.optimizedResumeMarkdown,
+      source: "openai",
+    };
+  } catch (_error) {
+    return fallback;
+  }
+};
+
+const safeParseJson = (value) => {
+  if (!value) return null;
+  const direct = tryParse(value);
+  if (direct) return direct;
+
+  const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) return tryParse(fenced[1].trim());
+  return null;
+};
+
+const tryParse = (value) => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeStringArray = (value, fallback) => {
+  if (!Array.isArray(value)) return fallback;
+  const cleaned = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 8);
+  return cleaned.length ? cleaned : fallback;
+};
+
+const buildFallbackResumeOptimization = (resumeText = "") => {
+  const lower = resumeText.toLowerCase();
+  const lacking = [];
+  if (!/project|projects/.test(lower)) lacking.push("Projects section with role-relevant work is missing or too weak.");
+  if (!/\d+%|\d+\s*(users|ms|sec|seconds|days|weeks|months)/.test(lower)) {
+    lacking.push("Impact metrics are limited (percentages, scale, latency, user counts).");
+  }
+  if (!/github|portfolio|linkedin/.test(lower)) lacking.push("Professional links (GitHub/portfolio/LinkedIn) are missing.");
+  if (!/skills/.test(lower)) lacking.push("Dedicated skills section is not clearly visible.");
+
+  const improvements = [
+    "Start each experience bullet with strong action verbs and keep each bullet to one measurable outcome.",
+    "Group technical skills by category: Languages, Frameworks, Tools, Databases, Cloud.",
+    "Tailor keywords to the target role and mirror terms from job descriptions.",
+    "Move the strongest projects higher and add one line on business/user impact for each.",
+  ];
+
+  return {
+    summary: "Resume baseline is good, but stronger metrics, role-aligned keywords, and clearer section hierarchy can significantly improve shortlist chances.",
+    lacking: lacking.length ? lacking : ["More quantified achievements and stronger project outcomes are needed."],
+    improvements,
+    optimizedResumeMarkdown: `## Professional Summary\nResult-driven student developer with hands-on project experience in web applications and data workflows. Focused on shipping measurable improvements, clean architecture, and collaborative delivery.\n\n## Skills\n- Languages: JavaScript, TypeScript, Python, SQL\n- Frameworks: React, Next.js, Node.js, Express\n- Tools: Git, Postman, Docker\n- Databases: MongoDB, PostgreSQL\n\n## Projects\n### Project Name\n- Built and deployed a feature that improved task completion by 28% across 1,200+ sessions.\n- Optimized API and caching logic, reducing average response time by 35%.\n- Added test coverage and monitoring, cutting regression incidents by 40%.\n\n## Experience\n### Role, Company\n- Implemented end-to-end feature delivery from requirement to production deployment.\n- Collaborated with cross-functional peers to prioritize roadmap items and fix critical bugs.\n- Produced reusable components and documentation to improve team velocity.\n\n## Education\n- Degree, Institute, Year\n\n## Links\n- GitHub: ...\n- LinkedIn: ...`,
+    source: "fallback",
+  };
+};
+
 module.exports = {
   getExplainableFeedback,
   generateInterviewFollowup,
+  getResumeOptimizationFromText,
 };

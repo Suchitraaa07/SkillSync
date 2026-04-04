@@ -5,11 +5,11 @@ const { connectDB } = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const analysisRoutes = require("./routes/analysisRoutes");
 const trackerRoutes = require("./routes/trackerRoutes");
+const pdfRoutes = require("./routes/pdfRoutes");
 
 dotenv.config();
 
 const app = express();
-
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -28,6 +28,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: "5mb" }));
+app.use("/pdf", pdfRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "SkillSync AI backend" });
