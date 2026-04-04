@@ -14,8 +14,6 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card } from "@/components/Card";
-import { ReadinessLine } from "@/components/charts/ReadinessLine";
-import { RoleFitBar } from "@/components/charts/RoleFitBar";
 import { api } from "@/lib/api";
 
 type ReadinessResponse = {
@@ -170,57 +168,6 @@ export default function DashboardPage() {
           <StatTile label="Skill Gaps" value={`${missingSkillEstimate}`} hint="High priority" />
           <StatTile label="To Internship Ready" value={`${weeksToReady} weeks`} hint="Keep going" />
           <StatTile label="Improvement" value={`+${monthlyImprovement}%`} hint="This month" />
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Card title="Readiness Trend">
-            <ReadinessLine data={readiness?.history || []} />
-          </Card>
-          <Card title="Opportunity Fit Heatmap">
-            <RoleFitBar data={roleFit} />
-          </Card>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Card title="Resume Upload (PDF)">
-            <form onSubmit={onUploadResume} className="space-y-3">
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/80 p-2.5 text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-3 file:py-1.5 file:text-indigo-100"
-              />
-              <button className="rounded-xl border border-indigo-400/35 bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-100 hover:bg-indigo-500/30">
-                Analyze Resume
-              </button>
-            </form>
-          </Card>
-
-          <Card title="Job Description Analysis">
-            <form onSubmit={onAnalyzeJob} className="space-y-3">
-              <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/80 p-2.5 text-sm text-slate-100 placeholder:text-slate-500"
-                placeholder="Role title"
-                value={roleTitle}
-                onChange={(e) => setRoleTitle(e.target.value)}
-              />
-              <textarea
-                className="h-28 w-full rounded-xl border border-slate-700 bg-slate-900/80 p-2.5 text-sm text-slate-100 placeholder:text-slate-500"
-                placeholder="Paste job description..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-              <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/80 p-2.5 text-sm text-slate-100 placeholder:text-slate-500"
-                placeholder="or job URL"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-              <button className="rounded-xl border border-cyan-300/35 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/25">
-                Analyze Job
-              </button>
-            </form>
-          </Card>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-3">

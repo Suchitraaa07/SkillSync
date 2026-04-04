@@ -37,10 +37,6 @@ const featureLinks = [
 ];
 
 const moreLinks = [
-  { href: "/dashboard", label: "Dashboard", icon: ChartNoAxesColumn },
-  { href: "/dashboard", label: "Recommendations", icon: Sparkles },
-  { href: "/applications", label: "Progress Tracker", icon: BriefcaseBusiness },
-  { href: "/dashboard", label: "Profile Comparison", icon: Compass },
   { href: "/dashboard", label: "Settings", icon: Settings },
 ];
 
@@ -130,9 +126,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          <div className="mt-6 border-t border-slate-800 pt-4">
-            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Core Features</p>
-            <div className="space-y-1.5">
+          <div className="mt-8 border-t border-slate-800 pt-5">
+            <p className="mb-4 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Core Features</p>
+            <div className="space-y-3">
               {featureLinks.map((link) => (
                 <SidebarLink key={link.label} {...link} pathname={pathname} />
               ))}
@@ -140,7 +136,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="mt-6 border-t border-slate-800 pt-4">
-            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">More</p>
             <div className="space-y-1.5">
               {moreLinks.map((link) => (
                 <SidebarLink key={link.label} {...link} pathname={pathname} />
