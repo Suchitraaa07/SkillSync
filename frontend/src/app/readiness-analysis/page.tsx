@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { api } from "@/lib/api";
@@ -129,6 +129,7 @@ export default function ReadinessAnalysisPage() {
   const [isJobsLoading, setIsJobsLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [jobsStatus, setJobsStatus] = useState("");
+  const lastJobsRequestRef = useRef<string>("");
 
   const loadAnalysis = async (text: string, role: string) => {
     if (!text.trim()) {
@@ -156,13 +157,27 @@ export default function ReadinessAnalysisPage() {
   };
 
   const loadJobs = async (role: string, matchedSkills: string[]) => {
+    const sortedSkills = [...matchedSkills].map((skill) => skill.trim()).filter(Boolean).sort();
+    const requestKey = `${role.toLowerCase()}::${sortedSkills.join(",")}`;
+
+    if (!sortedSkills.length) {
+      setJobs([]);
+      setJobsStatus("No matched skills yet. Analyze your resume and role first.");
+      return;
+    }
+
+    if (lastJobsRequestRef.current === requestKey) {
+      return;
+    }
+
     try {
       setIsJobsLoading(true);
       setJobsStatus("");
+      lastJobsRequestRef.current = requestKey;
       const response = await api.get<JobListing[]>("/api/jobs", {
         params: {
           role,
-          skills: matchedSkills.join(" "),
+          skills: sortedSkills.join(" "),
         },
       });
       setJobs(response.data || []);
@@ -171,7 +186,13 @@ export default function ReadinessAnalysisPage() {
       }
     } catch (error: any) {
       setJobs([]);
-      setJobsStatus(error?.response?.data?.message || "Could not fetch live opportunities right now.");
+      lastJobsRequestRef.current = "";
+      const message = error?.response?.data?.message || "Could not fetch live opportunities right now.";
+      if (Number(error?.response?.status) === 429) {
+        setJobsStatus("Too many requests to job provider. Please wait a minute and try again.");
+      } else {
+        setJobsStatus(message);
+      }
     } finally {
       setIsJobsLoading(false);
     }
@@ -186,6 +207,7 @@ export default function ReadinessAnalysisPage() {
 
   useEffect(() => {
     if (resumeText.trim()) {
+      lastJobsRequestRef.current = "";
       loadAnalysis(resumeText, selectedRole);
     }
   }, [selectedRole]);

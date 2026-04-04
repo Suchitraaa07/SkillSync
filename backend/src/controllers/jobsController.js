@@ -1,5 +1,37 @@
 const axios = require("axios");
 
+const JOB_CACHE_TTL_MS = 5 * 60 * 1000;
+const jobCache = new Map();
+
+const buildFallbackJobs = (role, skills) => {
+  const topSkills = skills.slice(0, 4);
+  const skillsText = topSkills.length ? `Skills: ${topSkills.join(", ")}.` : "Skills aligned with role requirements.";
+
+  return [
+    {
+      title: `${role} Intern`,
+      company: "Campus Hiring Partner",
+      location: "Remote, India",
+      applyLink: "https://internshala.com/internships",
+      description: `Entry-level internship track for ${role}. ${skillsText}`,
+    },
+    {
+      title: `Junior ${role}`,
+      company: "Startup Talent Pool",
+      location: "Bengaluru, India",
+      applyLink: "https://www.linkedin.com/jobs/",
+      description: `Early-career opportunity for ${role} with practical project exposure. ${skillsText}`,
+    },
+    {
+      title: `${role} Trainee`,
+      company: "Tech Fellowship Program",
+      location: "Hybrid, India",
+      applyLink: "https://www.naukri.com/",
+      description: `Structured trainee role focused on internships and mentorship. ${skillsText}`,
+    },
+  ];
+};
+
 const normalizeSkills = (skills) => {
   if (Array.isArray(skills)) {
     return skills.map((skill) => String(skill).trim()).filter(Boolean);
@@ -24,6 +56,16 @@ const getJobs = async (req, res) => {
 
     if (!process.env.RAPIDAPI_KEY || !process.env.RAPIDAPI_HOST) {
       return res.status(500).json({ message: "RapidAPI credentials are not configured" });
+    }
+
+    const cacheKey = `${role.toLowerCase()}::${skills
+      .map((skill) => skill.toLowerCase())
+      .sort()
+      .join(",")}`;
+    const now = Date.now();
+    const cached = jobCache.get(cacheKey);
+    if (cached && now - cached.timestamp < JOB_CACHE_TTL_MS) {
+      return res.json(cached.data);
     }
 
     const skillQuery = skills.join(" ");
@@ -51,9 +93,29 @@ const getJobs = async (req, res) => {
       description: job.job_description || "",
     }));
 
+    jobCache.set(cacheKey, { timestamp: now, data: simplified });
+
     return res.json(simplified);
   } catch (error) {
-    return res.status(500).json({
+    const statusCode = Number(error?.response?.status) || 500;
+    const providerMessage = String(error?.response?.data?.message || error?.message || "");
+
+    if (
+      statusCode === 403 ||
+      /not subscribed|subscribe|forbidden/i.test(providerMessage)
+    ) {
+      const role = String(req.query.role || "Intern").trim() || "Intern";
+      const skills = normalizeSkills(req.query.skills);
+      return res.status(200).json(buildFallbackJobs(role, skills));
+    }
+
+    if (statusCode === 429) {
+      return res.status(429).json({
+        message: "Rate limit reached on job provider. Please try again in a minute.",
+      });
+    }
+
+    return res.status(statusCode >= 400 && statusCode < 600 ? statusCode : 500).json({
       message: error.response?.data?.message || "Failed to fetch jobs from JSearch",
     });
   }

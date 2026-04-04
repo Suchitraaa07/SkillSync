@@ -5,9 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Bell,
-  BriefcaseBusiness,
-  ChartNoAxesColumn,
-  Compass,
   FileText,
   Gauge,
   Home,
@@ -16,13 +13,18 @@ import {
   Map,
   Settings,
   Shield,
+<<<<<<< HEAD
+=======
   Sparkles,
+  TrendingUp,
+>>>>>>> 588573b (Saving work before syncing)
   Target,
   UserCircle2,
   X,
   Zap,
 } from "lucide-react";
 import { authStore } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 const primaryLinks = [
   { href: "/dashboard", label: "Home", icon: Home },
@@ -37,7 +39,8 @@ const featureLinks = [
 ];
 
 const moreLinks = [
-  { href: "/dashboard", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/progress", label: "Progress Tracker", icon: TrendingUp },
 ];
 
 function SidebarLink({
@@ -82,6 +85,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     leetcode: "",
   });
   const [connectStatus, setConnectStatus] = useState("");
+  const [isSavingProfiles, setIsSavingProfiles] = useState(false);
+
+  const connectedCount = [profileLinks.linkedin, profileLinks.github, profileLinks.leetcode].filter(
+    (value) => value.trim().length > 0
+  ).length;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -99,11 +107,43 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const onSaveProfiles = () => {
+  const onSaveProfiles = async () => {
     if (typeof window === "undefined") return;
-    localStorage.setItem("skillsync_profiles", JSON.stringify(profileLinks));
-    setConnectStatus("Profiles connected successfully.");
-    setShowConnectModal(false);
+
+    const normalizeUrl = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+      return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    };
+
+    const normalizedProfiles = {
+      linkedin: normalizeUrl(profileLinks.linkedin),
+      github: normalizeUrl(profileLinks.github),
+      leetcode: normalizeUrl(profileLinks.leetcode),
+    };
+
+    try {
+      setIsSavingProfiles(true);
+      await api.patch("/api/auth/profiles", normalizedProfiles);
+
+      localStorage.setItem(
+        "skillsync_profiles",
+        JSON.stringify({
+          ...normalizedProfiles,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+      setProfileLinks(normalizedProfiles);
+      window.dispatchEvent(new Event("skillsync:profiles-updated"));
+      setConnectStatus(
+        `Connected ${[normalizedProfiles.linkedin, normalizedProfiles.github, normalizedProfiles.leetcode].filter(Boolean).length}/3 profiles successfully.`
+      );
+      setShowConnectModal(false);
+    } catch (error: any) {
+      setConnectStatus(error?.response?.data?.message || "Could not save profiles. Please try again.");
+    } finally {
+      setIsSavingProfiles(false);
+    }
   };
 
   return (
@@ -177,7 +217,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 onClick={() => setShowConnectModal(true)}
                 className="rounded-xl border border-indigo-400/30 bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-100 hover:bg-indigo-500/30"
               >
-                + Connect Profiles
+                + Connect Profiles ({connectedCount}/3)
               </button>
               <button className="rounded-xl border border-slate-700 bg-slate-900/90 p-2.5 text-slate-300 hover:text-white">
                 <Bell className="h-4 w-4" />
@@ -242,9 +282,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
               <button
                 onClick={onSaveProfiles}
+                disabled={isSavingProfiles}
                 className="rounded-xl border border-indigo-400/30 bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-100 hover:bg-indigo-500/30"
               >
-                Save Profiles
+                {isSavingProfiles ? "Saving..." : "Save Profiles"}
               </button>
             </div>
           </div>
