@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const { signToken } = require("../utils/jwt");
+const { analyzeProfiles, normalizeUrl } = require("../services/profileIntelligenceService");
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -10,6 +11,12 @@ const sanitizeUser = (user) => ({
   experienceYears: user.experienceYears,
   gamificationLevel: user.gamificationLevel,
   xp: user.xp,
+  profileLinks: {
+    linkedin: user.profileLinks?.linkedin || "",
+    github: user.profileLinks?.github || "",
+    leetcode: user.profileLinks?.leetcode || "",
+    updatedAt: user.profileLinks?.updatedAt || null,
+  },
 });
 
 const signup = async (req, res) => {
@@ -63,4 +70,57 @@ const me = async (req, res) => {
   return res.json({ user: sanitizeUser(user) });
 };
 
-module.exports = { signup, login, me };
+const updateProfiles = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const linkedin = normalizeUrl(req.body?.linkedin);
+    const github = normalizeUrl(req.body?.github);
+    const leetcode = normalizeUrl(req.body?.leetcode);
+
+    user.profileLinks = {
+      linkedin,
+      github,
+      leetcode,
+      updatedAt: new Date(),
+    };
+
+    await user.save();
+    return res.json({
+      message: "Profiles updated",
+      profileLinks: user.profileLinks,
+      user: sanitizeUser(user),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update profiles" });
+  }
+};
+
+const getProfileIntelligence = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const latestReadiness = user.readinessHistory?.length
+      ? user.readinessHistory[user.readinessHistory.length - 1].score
+      : 0;
+
+    const analysis = await analyzeProfiles({
+      linkedin: user.profileLinks?.linkedin,
+      github: user.profileLinks?.github,
+      leetcode: user.profileLinks?.leetcode,
+      readinessScore: latestReadiness,
+    });
+
+    return res.json(analysis);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to analyze connected profiles" });
+  }
+};
+
+module.exports = { signup, login, me, updateProfiles, getProfileIntelligence };

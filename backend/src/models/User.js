@@ -18,6 +18,12 @@ const UserSchema = new mongoose.Schema(
     ],
     gamificationLevel: { type: String, default: "Beginner" },
     xp: { type: Number, default: 0 },
+    profileLinks: {
+      linkedin: { type: String, default: "" },
+      github: { type: String, default: "" },
+      leetcode: { type: String, default: "" },
+      updatedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
