@@ -1,32 +1,56 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronUp, ClipboardCheck, Rocket, TrendingUp } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  CheckCircle2,
+  Code2,
+  FolderKanban,
+  GitBranch,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
+import { ApplicationList } from "@/components/applications/ApplicationList";
+import { ApplicationModal } from "@/components/applications/ApplicationModal";
+import { ApplicationSkeleton } from "@/components/applications/ApplicationSkeleton";
+import { ApplicationsOverTimeChart } from "@/components/applications/ApplicationsOverTimeChart";
+import { ConversionFunnelChart } from "@/components/applications/ConversionFunnelChart";
+import { ReferralImpactChart } from "@/components/applications/ReferralImpactChart";
+import { RoleSuccessChart } from "@/components/applications/RoleSuccessChart";
+import { ApplicationFormValues, ApplicationItem, ApplicationStatus } from "@/components/applications/types";
 import { api } from "@/lib/api";
+import {
+  getApplicationsOverTime,
+  getConversionFunnel,
+  getReferralImpact,
+  getRoleSuccessRate,
+  getSummaryMetrics,
+} from "@/lib/applicationAnalytics";
 import { ProgressCard } from "@/components/progress/ProgressCard";
-import { ProgressTrackerCards } from "@/components/progress/ProgressTrackerCards";
 import { StatItem } from "@/components/progress/StatItem";
-import { TrendChart } from "@/components/progress/TrendChart";
 
-type PeriodKey = "weekly" | "monthly";
-
-type GrowthPoint = {
-  label: string;
-  primary: number;
+type RoadmapProgressSnapshot = {
+  roleKey: string;
+  roleLabel: string;
+  selectedId: string | null;
+  progressById: Record<string, "not_started" | "in_progress" | "completed">;
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  notStartedTasks: number;
+  pendingTasks: number;
+  overallProgress: number;
+  updatedAt: string;
 };
 
-type ImprovementStat = {
-  label: string;
-  value: string;
-  delta: string;
-};
-
-type SkillProgress = {
-  skill: string;
-  progress: number;
-  improvement: string;
+type ToastState = {
+  tone: "success" | "error";
+  message: string;
 };
 
 type ReadinessResponse = {
@@ -42,14 +66,19 @@ type ReadinessResponse = {
   history: { score: number; category: string; createdAt: string }[];
 };
 
-type AppItem = {
-  _id: string;
-  company: string;
-  role: string;
-  status: "Saved" | "Applied" | "Interview" | "Rejected" | "Offer";
-  fitScore: number;
-  createdAt?: string;
-  appliedAt?: string;
+type ProfileIntelligenceResponse = {
+  githubGrowth?: {
+    score: number;
+    totalRepositories: number;
+    totalCommits30d: number;
+    longestStreakDays: number;
+  };
+  leetcodeProgress?: {
+    score: number;
+    totalProblemsSolved: number;
+    contestRating: number;
+    currentStreakDays: number;
+  };
 };
 
 type RoadmapItem = {
@@ -59,26 +88,44 @@ type RoadmapItem = {
   resources: string[];
 };
 
-const fallbackGrowth = [
-  { label: "Jan", primary: 52 },
-  { label: "Feb", primary: 58 },
-  { label: "Mar", primary: 63 },
-  { label: "Apr", primary: 68 },
-  { label: "May", primary: 71 },
-  { label: "Jun", primary: 74 },
-] satisfies GrowthPoint[];
-
-const formatDelta = (value: number) => {
-  const rounded = Math.round(value);
-  return `${rounded >= 0 ? "+" : ""}${rounded}%`;
+type UpcomingProjectItem = {
+  id: string;
+  weekLabel: string;
+  focus: string;
+  project: string;
+  resources: string[];
+  source: "roadmap" | "custom";
 };
 
-const shortlistStatuses = new Set(["Interview", "Offer"]);
+type OverallSignal = {
+  label: string;
+  value: number;
+  hint: string;
+  icon: typeof TrendingUp;
+  tone: "emerald" | "cyan" | "amber" | "violet" | "blue";
+};
 
-const monthLabel = (value: string) =>
-  new Date(value).toLocaleDateString(undefined, { month: "short" });
+const ROADMAP_PROGRESS_STORAGE_KEY = "skillsync_roadmap_progress";
+const ROADMAP_PROGRESS_UPDATED_EVENT = "skillsync-roadmap-progress-updated";
+const UPCOMING_PROJECTS_STORAGE_KEY = "skillsync_progress_upcoming_projects";
 
-const toScoreOutOfTen = (score: number) => Number((Math.max(0, Math.min(100, score)) / 10).toFixed(1));
+const readActiveRoadmapSnapshot = (): RoadmapProgressSnapshot | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(ROADMAP_PROGRESS_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    const activeRoleKey = typeof parsed?.activeRoleKey === "string" ? parsed.activeRoleKey : null;
+    const snapshots = parsed?.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
+    const snapshot = activeRoleKey ? snapshots[activeRoleKey] : null;
+
+    return snapshot && typeof snapshot === "object" ? snapshot : null;
+  } catch {
+    return null;
+  }
+};
 
 const MOTIVATIONAL_QUOTES = [
   "Consistency compounds faster than intensity.",
@@ -94,20 +141,73 @@ const MOTIVATIONAL_QUOTES = [
 ];
 
 export default function ProgressPage() {
-  const [period, setPeriod] = useState<PeriodKey>("weekly");
-  const [animateBars, setAnimateBars] = useState(false);
   const [quoteOffset, setQuoteOffset] = useState(0);
   const [dayStartSeed, setDayStartSeed] = useState<number>(Math.floor(Date.now() / 86400000));
   const [readinessData, setReadinessData] = useState<ReadinessResponse | null>(null);
-  const [applications, setApplications] = useState<AppItem[]>([]);
+  const [profileIntel, setProfileIntel] = useState<ProfileIntelligenceResponse | null>(null);
+  const [applications, setApplications] = useState<ApplicationItem[]>([]);
   const [roadmap, setRoadmap] = useState<RoadmapItem[]>([]);
+  const [roadmapSnapshot, setRoadmapSnapshot] = useState<RoadmapProgressSnapshot | null>(null);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [applicationToast, setApplicationToast] = useState<ToastState | null>(null);
+  const [isApplicationSaving, setIsApplicationSaving] = useState(false);
+  const [busyApplicationId, setBusyApplicationId] = useState<string | null>(null);
+  const [hiddenUpcomingProjectIds, setHiddenUpcomingProjectIds] = useState<string[]>([]);
+  const [customUpcomingProjects, setCustomUpcomingProjects] = useState<UpcomingProjectItem[]>([]);
+  const [showUpcomingProjectForm, setShowUpcomingProjectForm] = useState(false);
+  const [upcomingProjectForm, setUpcomingProjectForm] = useState({
+    weekLabel: "",
+    focus: "",
+    project: "",
+  });
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setAnimateBars(true), 120);
-    return () => clearTimeout(timer);
+    if (!applicationToast) return;
+    const timer = window.setTimeout(() => setApplicationToast(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [applicationToast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(UPCOMING_PROJECTS_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      setHiddenUpcomingProjectIds(Array.isArray(parsed?.hiddenIds) ? parsed.hiddenIds.filter((item) => typeof item === "string") : []);
+      setCustomUpcomingProjects(
+        Array.isArray(parsed?.customProjects)
+          ? parsed.customProjects.filter(
+              (item) =>
+                item &&
+                typeof item.id === "string" &&
+                typeof item.weekLabel === "string" &&
+                typeof item.focus === "string" &&
+                typeof item.project === "string" &&
+                Array.isArray(item.resources)
+            )
+          : []
+      );
+    } catch {
+      setHiddenUpcomingProjectIds([]);
+      setCustomUpcomingProjects([]);
+    }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.localStorage.setItem(
+      UPCOMING_PROJECTS_STORAGE_KEY,
+      JSON.stringify({
+        hiddenIds: hiddenUpcomingProjectIds,
+        customProjects: customUpcomingProjects,
+      })
+    );
+  }, [customUpcomingProjects, hiddenUpcomingProjectIds]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -127,21 +227,51 @@ export default function ProgressPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncRoadmapSnapshot = () => {
+      setRoadmapSnapshot(readActiveRoadmapSnapshot());
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === ROADMAP_PROGRESS_STORAGE_KEY) {
+        syncRoadmapSnapshot();
+      }
+    };
+
+    const handleRoadmapUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<RoadmapProgressSnapshot | null>).detail;
+      setRoadmapSnapshot(detail || readActiveRoadmapSnapshot());
+    };
+
+    syncRoadmapSnapshot();
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(ROADMAP_PROGRESS_UPDATED_EVENT, handleRoadmapUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(ROADMAP_PROGRESS_UPDATED_EVENT, handleRoadmapUpdate as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
 
     const loadLiveData = async () => {
       try {
         if (mounted) setStatus("");
-        const [readinessRes, appsRes, roadmapRes] = await Promise.all([
+        const [readinessRes, appsRes, roadmapRes, profileIntelRes] = await Promise.all([
           api.get<ReadinessResponse>("/readiness-score"),
-          api.get<{ applications: AppItem[] }>("/applications"),
+          api.get<{ applications: ApplicationItem[] }>("/api/applications"),
           api.get<{ roadmap: RoadmapItem[] }>("/roadmap"),
+          api.get<ProfileIntelligenceResponse>("/api/auth/profile-intelligence").catch(() => null),
         ]);
 
         if (!mounted) return;
         setReadinessData(readinessRes.data);
         setApplications(appsRes.data.applications || []);
         setRoadmap(roadmapRes.data.roadmap || []);
+        setProfileIntel(profileIntelRes?.data || null);
       } catch {
         if (!mounted) return;
         setStatus("Showing sample values until resume/job analysis data is available.");
@@ -159,116 +289,32 @@ export default function ProgressPage() {
     };
   }, []);
 
-  const history = useMemo(() => readinessData?.history || [], [readinessData]);
   const currentScore = readinessData?.readiness?.score ?? 74;
-  const scoreComponents = useMemo(
-    () => readinessData?.readiness?.components || {},
-    [readinessData]
-  );
-
-  const growthTrend = useMemo(() => {
-    if (!history.length) return fallbackGrowth;
-    const points = history.slice(-6).map((item, index) => ({
-      label: item.createdAt ? monthLabel(item.createdAt) : `P${index + 1}`,
-      primary: Math.max(0, Math.min(100, item.score)),
-    }));
-    return points.length ? points : fallbackGrowth;
-  }, [history]);
-
-  const scoreChange = useMemo(() => {
-    if (history.length < 2) return 0;
-    return history[history.length - 1].score - history[0].score;
-  }, [history]);
-
-  const shortlistRate = useMemo(() => {
-    if (!applications.length) return 8;
-    const shortlisted = applications.filter((item) => shortlistStatuses.has(item.status)).length;
-    return Math.round((shortlisted / applications.length) * 100);
-  }, [applications]);
 
   const interviewCount = useMemo(
     () => applications.filter((item) => item.status === "Interview").length,
     [applications]
   );
 
-  const appsByMonth = useMemo(() => {
-    if (!applications.length) return fallbackGrowth.map((item) => ({ ...item, secondary: Math.round(item.primary * 0.25) }));
+  const applicationSummary = useMemo(() => getSummaryMetrics(applications), [applications]);
+  const applicationsOverTime = useMemo(() => getApplicationsOverTime(applications), [applications]);
+  const conversionFunnel = useMemo(() => getConversionFunnel(applications), [applications]);
+  const roleSuccessRates = useMemo(() => getRoleSuccessRate(applications), [applications]);
+  const referralImpact = useMemo(() => getReferralImpact(applications), [applications]);
+  const githubGrowthScore = Math.max(0, Math.min(100, Math.round(profileIntel?.githubGrowth?.score ?? 0)));
+  const leetcodeProgressScore = Math.max(0, Math.min(100, Math.round(profileIntel?.leetcodeProgress?.score ?? 0)));
+  const applicationProgressScore = Math.max(
+    0,
+    Math.min(100, Math.round(applicationSummary.shortlistRate * 0.7 + applicationSummary.offerRate * 0.3))
+  );
 
-    const buckets = new Map<string, { primary: number; secondary: number; date: Date }>();
-
-    applications.forEach((app) => {
-      const rawDate = app.appliedAt || app.createdAt;
-      const date = rawDate ? new Date(rawDate) : new Date();
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
-      const current = buckets.get(key) || { primary: 0, secondary: 0, date: new Date(date.getFullYear(), date.getMonth(), 1) };
-      current.primary += 1;
-      if (shortlistStatuses.has(app.status)) current.secondary += 1;
-      buckets.set(key, current);
-    });
-
-    return Array.from(buckets.values())
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(-6)
-      .map((item) => ({
-        label: item.date.toLocaleDateString(undefined, { month: "short" }),
-        primary: item.primary,
-        secondary: item.secondary,
-      }));
-  }, [applications]);
-
-  const interviewTrend = useMemo(() => {
-    const source = growthTrend.length ? growthTrend : fallbackGrowth;
-    return source.map((item, idx) => ({
-      label: `M${idx + 1}`,
-      primary: toScoreOutOfTen(item.primary),
-    }));
-  }, [growthTrend]);
-
-  const currentInterviewScore = interviewTrend[interviewTrend.length - 1]?.primary ?? 7.4;
-  const initialInterviewScore = interviewTrend[0]?.primary ?? 5.8;
-
-  const skillTrackerData: SkillProgress[] = useMemo(() => {
-    const skillMatch = Math.max(0, Math.min(100, Math.round(scoreComponents.skillMatch ?? currentScore)));
-    const systemDesign = Math.max(0, Math.min(100, Math.round(scoreComponents.projectRelevance ?? currentScore - 8)));
-    const dsa = Math.max(0, Math.min(100, Math.round(scoreComponents.experienceScore ?? currentScore - 4)));
-    const improvementBase = Math.max(2, Math.abs(Math.round(scoreChange / 2)));
-
-    return [
-      { skill: "React", progress: skillMatch, improvement: `+${improvementBase + 4}%` },
-      { skill: "System Design", progress: systemDesign, improvement: `+${improvementBase + 2}%` },
-      { skill: "DSA", progress: dsa, improvement: `+${improvementBase + 3}%` },
-    ];
-  }, [currentScore, scoreComponents, scoreChange]);
-
-  const improvementByPeriod: Record<PeriodKey, ImprovementStat[]> = useMemo(() => {
-    const divisor = period === "weekly" ? 4 : 2;
-    const resumeChange = formatDelta(scoreChange / divisor);
-    const skillMatchChange = formatDelta(((scoreComponents.skillMatch ?? currentScore) - 50) / (period === "weekly" ? 8 : 5));
-    const interviewChange = formatDelta((currentInterviewScore - initialInterviewScore) * (period === "weekly" ? 4 : 7));
-    const shortlistChange = formatDelta(shortlistRate / (period === "weekly" ? 5 : 2.5));
-
-    return {
-      weekly: [
-        { label: "Resume Score Change", value: resumeChange, delta: "Week over week" },
-        { label: "Skill Match Increase", value: skillMatchChange, delta: "Week over week" },
-        { label: "Interview Performance", value: interviewChange, delta: "Week over week" },
-        { label: "Shortlist Rate", value: shortlistChange, delta: "Week over week" },
-      ],
-      monthly: [
-        { label: "Resume Score Change", value: formatDelta((scoreChange / divisor) * 2), delta: "Month over month" },
-        { label: "Skill Match Increase", value: formatDelta(((scoreComponents.skillMatch ?? currentScore) - 50) / 2.5), delta: "Month over month" },
-        { label: "Interview Performance", value: formatDelta((currentInterviewScore - initialInterviewScore) * 7), delta: "Month over month" },
-        { label: "Shortlist Rate", value: formatDelta(shortlistRate / 2), delta: "Month over month" },
-      ],
-    };
-  }, [currentScore, currentInterviewScore, initialInterviewScore, period, scoreChange, scoreComponents.skillMatch, shortlistRate]);
-
-  const currentStats = improvementByPeriod[period];
-
-  const roadmapProgress = Math.max(15, Math.min(95, Math.round(currentScore)));
-  const totalRoadmapTasks = roadmap.length || 12;
-  const completedTasks = Math.min(totalRoadmapTasks, Math.round((roadmapProgress / 100) * totalRoadmapTasks));
-  const pendingTasks = Math.max(0, totalRoadmapTasks - completedTasks);
+  const roadmapProgress = roadmapSnapshot?.overallProgress ?? Math.max(15, Math.min(95, Math.round(currentScore)));
+  const totalRoadmapTasks = roadmapSnapshot?.totalTasks ?? (roadmap.length || 12);
+  const completedTasks =
+    roadmapSnapshot?.completedTasks ??
+    Math.min(totalRoadmapTasks, Math.round((roadmapProgress / 100) * totalRoadmapTasks));
+  const inProgressTasks = roadmapSnapshot?.inProgressTasks ?? 0;
+  const pendingTasks = roadmapSnapshot?.pendingTasks ?? Math.max(0, totalRoadmapTasks - completedTasks);
 
   const roadmapMilestones = [
     { label: "Resume Optimized", done: currentScore >= 60 },
@@ -276,8 +322,216 @@ export default function ProgressPage() {
     { label: "70+ Overall Score Achieved", done: currentScore >= 70 },
   ];
 
-  const projectedScore = Math.min(100, Math.round(currentScore + Math.max(5, scoreChange / 3 || 6)));
-  const fullRoadmapScore = Math.min(100, projectedScore + Math.max(4, Math.round(pendingTasks / 2)));
+  const overallProgressScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        currentScore * 0.3 +
+          roadmapProgress * 0.25 +
+          githubGrowthScore * 0.15 +
+          leetcodeProgressScore * 0.15 +
+          applicationProgressScore * 0.15
+      )
+    )
+  );
+
+  const overallSignals = useMemo<OverallSignal[]>(
+    () => [
+      {
+        label: "Readiness",
+        value: currentScore,
+        hint: readinessData?.readiness?.category || "Core signal",
+        icon: ShieldCheck,
+        tone: "emerald",
+      },
+      {
+        label: "GitHub Growth",
+        value: githubGrowthScore,
+        hint: `${profileIntel?.githubGrowth?.totalCommits30d || 0} commits / 30d`,
+        icon: GitBranch,
+        tone: "cyan",
+      },
+      {
+        label: "LeetCode Progress",
+        value: leetcodeProgressScore,
+        hint: `${profileIntel?.leetcodeProgress?.totalProblemsSolved || 0} solved`,
+        icon: Code2,
+        tone: "amber",
+      },
+      {
+        label: "Roadmap",
+        value: roadmapProgress,
+        hint: `${completedTasks}/${totalRoadmapTasks} completed`,
+        icon: FolderKanban,
+        tone: "violet",
+      },
+      {
+        label: "Applications",
+        value: applicationProgressScore,
+        hint: `${applicationSummary.shortlistRate}% shortlist`,
+        icon: BriefcaseBusiness,
+        tone: "blue",
+      },
+    ],
+    [
+      applicationProgressScore,
+      applicationSummary.shortlistRate,
+      completedTasks,
+      currentScore,
+      githubGrowthScore,
+      leetcodeProgressScore,
+      profileIntel?.githubGrowth?.totalCommits30d,
+      profileIntel?.leetcodeProgress?.totalProblemsSolved,
+      readinessData?.readiness?.category,
+      roadmapProgress,
+      totalRoadmapTasks,
+    ]
+  );
+
+  const strongestSignal = useMemo(
+    () => overallSignals.reduce((best, current) => (current.value > best.value ? current : best), overallSignals[0]),
+    [overallSignals]
+  );
+  const focusSignal = useMemo(
+    () => overallSignals.reduce((lowest, current) => (current.value < lowest.value ? current : lowest), overallSignals[0]),
+    [overallSignals]
+  );
+
+  const roadmapUpcomingProjects = useMemo<UpcomingProjectItem[]>(() => {
+    if (roadmap.length) {
+      return roadmap.slice(0, 3).map((item, index) => ({
+        id: `${item.week}-${item.focusSkill}-${index}`,
+        weekLabel: `Week ${item.week}`,
+        focus: item.focusSkill || "Focused practice",
+        project: item.project || "Project sprint",
+        resources: Array.isArray(item.resources) ? item.resources.slice(0, 2) : [],
+        source: "roadmap",
+      }));
+    }
+
+    return [
+      {
+        id: "fallback-1",
+        weekLabel: "Week 1",
+        focus: "Portfolio polish",
+        project: "Ship one clean case-study update for your strongest project",
+        resources: ["Resume bullets", "GitHub README"],
+        source: "roadmap",
+      },
+      {
+        id: "fallback-2",
+        weekLabel: "Week 2",
+        focus: "Interview prep",
+        project: "Build a timed mock interview routine with answer notes",
+        resources: ["Mock questions", "STAR stories"],
+        source: "roadmap",
+      },
+      {
+        id: "fallback-3",
+        weekLabel: "Week 3",
+        focus: "Proof of work",
+        project: "Publish one small feature or mini project to show momentum",
+        resources: ["Deployment", "LinkedIn post"],
+        source: "roadmap",
+      },
+    ];
+  }, [roadmap]);
+
+  const upcomingProjects = useMemo(
+    () => [
+      ...customUpcomingProjects,
+      ...roadmapUpcomingProjects.filter((item) => !hiddenUpcomingProjectIds.includes(item.id)),
+    ],
+    [customUpcomingProjects, hiddenUpcomingProjectIds, roadmapUpcomingProjects]
+  );
+
+  const handleAddUpcomingProject = () => {
+    const project = upcomingProjectForm.project.trim();
+    const focus = upcomingProjectForm.focus.trim();
+    const weekLabel = upcomingProjectForm.weekLabel.trim() || "Next Sprint";
+
+    if (!project || !focus) return;
+
+    const nextProject: UpcomingProjectItem = {
+      id: `custom-${Date.now()}`,
+      weekLabel,
+      focus,
+      project,
+      resources: [],
+      source: "custom",
+    };
+
+    setCustomUpcomingProjects((prev) => [nextProject, ...prev]);
+    setUpcomingProjectForm({ weekLabel: "", focus: "", project: "" });
+    setShowUpcomingProjectForm(false);
+  };
+
+  const handleRemoveUpcomingProject = (projectId: string, source: UpcomingProjectItem["source"]) => {
+    if (source === "custom") {
+      setCustomUpcomingProjects((prev) => prev.filter((item) => item.id !== projectId));
+      return;
+    }
+
+    setHiddenUpcomingProjectIds((prev) => (prev.includes(projectId) ? prev : [...prev, projectId]));
+  };
+
+  const handleApplicationCreated = async (values: ApplicationFormValues) => {
+    try {
+      setIsApplicationSaving(true);
+      const { data } = await api.post<{ application: ApplicationItem }>("/api/applications", values);
+      setApplications((prev) =>
+        [data.application, ...prev].sort(
+          (a, b) => new Date(b.dateApplied || b.createdAt).getTime() - new Date(a.dateApplied || a.createdAt).getTime()
+        )
+      );
+      setApplicationToast({ tone: "success", message: "Application saved successfully." });
+    } catch (error: any) {
+      setApplicationToast({
+        tone: "error",
+        message: error?.response?.data?.message || "Could not save application.",
+      });
+      throw error;
+    } finally {
+      setIsApplicationSaving(false);
+    }
+  };
+
+  const handleApplicationStatusChange = async (id: string, status: ApplicationStatus) => {
+    try {
+      setBusyApplicationId(id);
+      const { data } = await api.put<{ application: ApplicationItem }>(`/api/applications/${id}`, { status });
+      setApplications((prev) => prev.map((item) => (item._id === id ? data.application : item)));
+      setApplicationToast({ tone: "success", message: "Application status updated." });
+    } catch (error: any) {
+      setApplicationToast({
+        tone: "error",
+        message: error?.response?.data?.message || "Could not update status.",
+      });
+    } finally {
+      setBusyApplicationId(null);
+    }
+  };
+
+  const handleApplicationDelete = async (id: string) => {
+    if (typeof window !== "undefined" && !window.confirm("Delete this application?")) {
+      return;
+    }
+
+    try {
+      setBusyApplicationId(id);
+      await api.delete(`/api/applications/${id}`);
+      setApplications((prev) => prev.filter((item) => item._id !== id));
+      setApplicationToast({ tone: "success", message: "Application deleted." });
+    } catch (error: any) {
+      setApplicationToast({
+        tone: "error",
+        message: error?.response?.data?.message || "Could not delete application.",
+      });
+    } finally {
+      setBusyApplicationId(null);
+    }
+  };
 
   const daySeed = Math.floor(Date.now() / 86400000);
   const dayCount = Math.max(1, daySeed - dayStartSeed + 1);
@@ -328,81 +582,91 @@ export default function ProgressPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-2">
-          <ProgressCard title="Weekly / Monthly Improvements">
-            <div className="mb-4 inline-flex rounded-xl border border-slate-700 bg-slate-900/80 p-1">
-              {(["weekly", "monthly"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setPeriod(tab)}
-                  className={`rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition ${
-                    period === tab
-                      ? "bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-300/35"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
+        <section>
+          <ProgressCard
+            title="Overall Progress"
+            subtitle="A single progress pulse built from your coding proof, DSA consistency, roadmap execution, and application momentum."
+            className="border-cyan-400/15 bg-[radial-gradient(circle_at_10%_10%,rgba(34,211,238,0.14),transparent_28%),radial-gradient(circle_at_90%_15%,rgba(168,85,247,0.14),transparent_26%),linear-gradient(160deg,rgba(12,18,34,0.98),rgba(8,12,24,0.98)_60%,rgba(2,6,18,1))]"
+          >
+            <div className="grid gap-6 xl:grid-cols-[320px_1fr] xl:items-center">
+              <div className="relative flex items-center justify-center">
+                <div className="pointer-events-none absolute h-56 w-56 rounded-full bg-cyan-500/12 blur-3xl" />
+                <div className="pointer-events-none absolute h-40 w-40 rounded-full bg-violet-500/12 blur-2xl" />
+                <div
+                  className="relative grid h-64 w-64 place-items-center rounded-full border border-white/10 bg-slate-950/70 shadow-[0_0_45px_rgba(34,211,238,0.16)]"
+                  style={{
+                    background: `conic-gradient(from 200deg, rgba(16,185,129,0.98) 0deg, rgba(34,211,238,0.98) ${Math.max(
+                      0,
+                      overallProgressScore * 2.6
+                    )}deg, rgba(250,204,21,0.95) ${Math.min(360, overallProgressScore * 3.6)}deg, rgba(51,65,85,0.55) 0deg)`,
+                  }}
                 >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {currentStats.map((item) => (
-                <StatItem key={item.label} label={item.label} value={item.value} delta={item.delta} icon={TrendingUp} />
-              ))}
-            </div>
-          </ProgressCard>
-
-          <ProgressCard title="Skill Development Tracker" subtitle="Track depth-building momentum across key domains">
-            <div className="space-y-4">
-              {skillTrackerData.map((item) => (
-                <div key={item.skill} className="rounded-xl border border-slate-700/65 bg-slate-900/60 p-3.5 transition duration-300 hover:border-emerald-300/25">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-slate-100">{item.skill}</p>
-                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-200">
-                      <ChevronUp className="h-4 w-4" />
-                      {item.improvement}
-                    </span>
-                  </div>
-                  <div className="mt-3 h-3.5 w-full overflow-hidden rounded-full border border-white/10 bg-slate-900/85">
-                    <div
-                      className="h-full rounded-full bg-linear-to-r from-emerald-400 via-cyan-400 to-amber-300 shadow-[0_0_26px_rgba(52,211,153,0.45)] transition-all duration-700"
-                      style={{ width: animateBars ? `${item.progress}%` : "0%" }}
-                    />
+                  <div className="grid h-48 w-48 place-items-center rounded-full border border-white/6 bg-[radial-gradient(circle_at_top,rgba(30,41,59,0.95),rgba(2,6,23,0.98))] text-center">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200/80">Overall</p>
+                      <p className="mt-3 bg-linear-to-r from-cyan-100 via-emerald-100 to-amber-100 bg-clip-text text-6xl font-semibold text-transparent">
+                        {overallProgressScore}
+                      </p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">out of 100</p>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </ProgressCard>
-        </section>
+              </div>
 
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_1.3fr]">
-          <ProgressCard title="Interview Performance Tracker" subtitle="Consistency in mocks is pushing your confidence curve upward">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <StatItem label="Total Mocks Taken" value={String(interviewCount)} delta="Live from tracker" icon={ClipboardCheck} />
-              <StatItem label="Avg Score Trend" value={`${initialInterviewScore} → ${currentInterviewScore}`} delta={`${currentInterviewScore - initialInterviewScore >= 0 ? "+" : ""}${(currentInterviewScore - initialInterviewScore).toFixed(1)} jump`} icon={TrendingUp} />
-              <StatItem label="Communication Score" value={String(toScoreOutOfTen(scoreComponents.skillMatch ?? 76))} delta={formatDelta(((scoreComponents.skillMatch ?? 76) - 60) / 4)} />
-              <StatItem label="Technical Depth Score" value={String(toScoreOutOfTen(scoreComponents.experienceScore ?? 72))} delta={formatDelta(((scoreComponents.experienceScore ?? 72) - 58) / 4)} />
-            </div>
-            <div className="mt-4 rounded-xl border border-slate-700/65 bg-slate-900/60 p-3">
-              <TrendChart data={interviewTrend} variant="mini" height={140} />
-            </div>
-          </ProgressCard>
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300/90">Progress Pulse</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-slate-100">A sharper view of where your profile is actually moving</h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+                      This score blends the same GitHub and LeetCode growth signals visible on Home with your roadmap execution, application funnel, and readiness score from Progress Tracker.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-cyan-300/25 bg-cyan-500/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">
+                    Live Blend
+                  </span>
+                </div>
 
-          <ProgressCard title="Applications Analytics" subtitle="Applications vs shortlist conversion over recent months">
-            <TrendChart data={appsByMonth} variant="dual" height={240} />
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <StatItem label="Success Rate" value={`${shortlistRate}%`} delta={formatDelta(shortlistRate / 6)} icon={Rocket} />
-              <StatItem
-                label="Monthly Avg Applications"
-                value={String(Math.round(appsByMonth.reduce((sum, item) => sum + item.primary, 0) / Math.max(1, appsByMonth.length)))}
-                delta="Live"
-              />
-              <StatItem
-                label="Monthly Avg Shortlists"
-                value={String(Math.round(appsByMonth.reduce((sum, item) => sum + (item.secondary || 0), 0) / Math.max(1, appsByMonth.length)))}
-                delta="Live"
-              />
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  {overallSignals.map((signal) => (
+                    <OverallSignalTile key={signal.label} signal={signal} />
+                  ))}
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-2xl border border-slate-700/65 bg-slate-950/45 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-200">Signal Breakdown</p>
+                      <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Weighted inputs</p>
+                    </div>
+                    <div className="space-y-3">
+                      {overallSignals.map((signal) => (
+                        <OverallSignalBar key={`${signal.label}-bar`} signal={signal} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">Strongest Signal</p>
+                      <p className="mt-2 text-lg font-semibold text-emerald-50">{strongestSignal.label}</p>
+                      <p className="mt-1 text-sm text-emerald-100/85">{strongestSignal.hint}</p>
+                    </div>
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">Next Focus</p>
+                      <p className="mt-2 text-lg font-semibold text-amber-50">{focusSignal.label}</p>
+                      <p className="mt-1 text-sm text-amber-100/85">This is the lowest current signal, so improving it will lift your overall progress fastest.</p>
+                    </div>
+                    {!profileIntel?.githubGrowth && !profileIntel?.leetcodeProgress ? (
+                      <div className="rounded-2xl border border-slate-700/65 bg-slate-950/45 p-4">
+                        <p className="text-sm leading-relaxed text-slate-400">
+                          GitHub and LeetCode scores sync from the same connected profile intelligence shown on Home. Connect those profiles for a fuller overall progress view.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </div>
           </ProgressCard>
         </section>
@@ -422,7 +686,11 @@ export default function ProgressPage() {
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <StatItem label="Completed Tasks" value={String(completedTasks)} delta="On track" icon={CheckCircle2} />
-                <StatItem label="Pending Tasks" value={String(pendingTasks)} delta="Focus next" />
+                <StatItem
+                  label="Pending Tasks"
+                  value={String(pendingTasks)}
+                  delta={inProgressTasks > 0 ? `${inProgressTasks} learning now` : "Focus next"}
+                />
               </div>
             </div>
 
@@ -446,32 +714,282 @@ export default function ProgressPage() {
             </div>
           </ProgressCard>
 
-          <ProgressCard title="Momentum Insight" subtitle="If you sustain this execution pace, interview readiness compounds quickly.">
-            <div className="rounded-xl border border-slate-700/65 bg-slate-900/65 p-4">
-              <p className="text-sm leading-relaxed text-slate-300">
-                Your profile currently improves faster in interview and project-readiness dimensions than resume depth. Prioritize
-                one additional project shipment this month to unlock the projected curve.
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-lg border border-slate-700/60 bg-slate-950/75 p-2 text-center">
-                  <p className="text-xs text-slate-400">Current</p>
-                  <p className="text-lg font-semibold text-slate-100">{currentScore}</p>
-                </div>
-                <div className="rounded-lg border border-emerald-300/35 bg-emerald-500/10 p-2 text-center">
-                  <p className="text-xs text-emerald-200">Projected</p>
-                  <p className="text-lg font-semibold text-emerald-100">{projectedScore}</p>
-                </div>
-                <div className="rounded-lg border border-amber-300/35 bg-amber-500/10 p-2 text-center">
-                  <p className="text-xs text-amber-200">Full Plan</p>
-                  <p className="text-lg font-semibold text-amber-100">{fullRoadmapScore}</p>
-                </div>
+          <ProgressCard title="Upcoming Project Tracker" subtitle="Use your next roadmap steps as concrete build targets.">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/65 bg-slate-900/55 p-3">
+                <p className="text-sm text-slate-300">Add your own upcoming project or remove a suggestion you do not want to track.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowUpcomingProjectForm((prev) => !prev)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/12 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/22"
+                >
+                  <Plus className="h-4 w-4" />
+                  {showUpcomingProjectForm ? "Close" : "Add Project"}
+                </button>
               </div>
+
+              {showUpcomingProjectForm ? (
+                <div className="grid gap-3 rounded-xl border border-slate-700/65 bg-slate-900/55 p-4">
+                  <input
+                    value={upcomingProjectForm.weekLabel}
+                    onChange={(event) => setUpcomingProjectForm((prev) => ({ ...prev, weekLabel: event.target.value }))}
+                    placeholder="Week label, e.g. Week 4"
+                    className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/50"
+                  />
+                  <input
+                    value={upcomingProjectForm.focus}
+                    onChange={(event) => setUpcomingProjectForm((prev) => ({ ...prev, focus: event.target.value }))}
+                    placeholder="Focus area"
+                    className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/50"
+                  />
+                  <input
+                    value={upcomingProjectForm.project}
+                    onChange={(event) => setUpcomingProjectForm((prev) => ({ ...prev, project: event.target.value }))}
+                    placeholder="Project or task"
+                    className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/50"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleAddUpcomingProject}
+                      disabled={!upcomingProjectForm.focus.trim() || !upcomingProjectForm.project.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/12 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Save Project
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {!upcomingProjects.length ? (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/45 px-4 py-6 text-center text-sm text-slate-400">
+                  No upcoming projects in this tracker right now. Add one to start planning your next build.
+                </div>
+              ) : null}
+
+              {upcomingProjects.map((item) => (
+                <article
+                  key={item.id}
+                  className="rounded-xl border border-slate-700/65 bg-slate-900/65 p-4 transition duration-300 hover:border-cyan-300/25"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">{item.weekLabel}</p>
+                      <h3 className="mt-2 text-base font-semibold text-slate-100">{item.project}</h3>
+                      <p className="mt-1 text-sm text-slate-400">Focus: {item.focus}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-100">
+                        {item.source === "custom" ? "Custom" : "Upcoming"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveUpcomingProject(item.id, item.source)}
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+
+                  {item.resources.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.resources.map((resource) => (
+                        <span
+                          key={`${item.id}-${resource}`}
+                          className="rounded-full border border-slate-600 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-300"
+                        >
+                          {resource}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              ))}
             </div>
           </ProgressCard>
         </section>
 
-        <ProgressTrackerCards />
+        <section>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-100">Application Analytics</h2>
+              <p className="mt-1 text-sm text-slate-400">Track your funnel, referral impact, and role conversion without leaving Progress Tracker.</p>
+            </div>
+          </div>
+
+          {applicationToast ? (
+            <p
+              className={`mb-4 rounded-xl border px-3 py-2 text-sm ${
+                applicationToast.tone === "success"
+                  ? "border-emerald-300/30 bg-emerald-500/10 text-emerald-100"
+                  : "border-rose-300/30 bg-rose-500/10 text-rose-100"
+              }`}
+            >
+              {applicationToast.message}
+            </p>
+          ) : null}
+
+          {isLoading ? (
+            <ApplicationSkeleton />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatItem
+                    label="Applications"
+                    value={String(applicationSummary.totalApplications)}
+                    delta="Live"
+                    icon={BriefcaseBusiness}
+                  />
+                  <StatItem
+                    label="Shortlist Rate"
+                    value={`${applicationSummary.shortlistRate}%`}
+                    delta="Conversion"
+                    icon={TrendingUp}
+                  />
+                  <StatItem
+                    label="Offer Rate"
+                    value={`${applicationSummary.offerRate}%`}
+                    delta="Outcome"
+                    icon={Sparkles}
+                  />
+                  <StatItem
+                    label="Referral Mix"
+                    value={`${applicationSummary.referralRate}%`}
+                    delta="Network"
+                    icon={CheckCircle2}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowApplicationModal(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/12 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/22"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Application
+                </button>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <ProgressCard title="Applications Over Time" subtitle="Weekly volume of applications submitted">
+                  <ApplicationsOverTimeChart data={applicationsOverTime} />
+                </ProgressCard>
+
+                <ProgressCard title="Conversion Funnel" subtitle="Applied to offer progression across your pipeline">
+                  <ConversionFunnelChart data={conversionFunnel} />
+                </ProgressCard>
+
+                <ProgressCard title="Role Success Rate" subtitle="Percent shortlisted or better for each role">
+                  <RoleSuccessChart data={roleSuccessRates} />
+                </ProgressCard>
+
+                <ProgressCard title="Referral Impact" subtitle="Referral vs non-referral shortlist success">
+                  <ReferralImpactChart data={referralImpact} />
+                </ProgressCard>
+              </div>
+
+              <ProgressCard title="Tracked Applications" subtitle="Update statuses or delete entries in place">
+                <ApplicationList
+                  applications={applications}
+                  busyId={busyApplicationId}
+                  onStatusChange={handleApplicationStatusChange}
+                  onDelete={handleApplicationDelete}
+                />
+              </ProgressCard>
+            </div>
+          )}
+        </section>
+        <ApplicationModal
+          open={showApplicationModal}
+          isSaving={isApplicationSaving}
+          onClose={() => setShowApplicationModal(false)}
+          onSubmit={async (values) => {
+            await handleApplicationCreated(values);
+            setShowApplicationModal(false);
+          }}
+        />
       </AppShell>
     </AuthGuard>
+  );
+}
+
+function toneClasses(tone: OverallSignal["tone"]) {
+  return {
+    emerald: {
+      pill: "border-emerald-300/25 bg-emerald-500/12 text-emerald-100",
+      iconWrap: "border-emerald-300/20 bg-emerald-500/10 text-emerald-200",
+      bar: "from-emerald-400 to-teal-300",
+    },
+    cyan: {
+      pill: "border-cyan-300/25 bg-cyan-500/12 text-cyan-100",
+      iconWrap: "border-cyan-300/20 bg-cyan-500/10 text-cyan-200",
+      bar: "from-cyan-400 to-sky-300",
+    },
+    amber: {
+      pill: "border-amber-300/25 bg-amber-500/12 text-amber-100",
+      iconWrap: "border-amber-300/20 bg-amber-500/10 text-amber-200",
+      bar: "from-amber-400 to-yellow-300",
+    },
+    violet: {
+      pill: "border-violet-300/25 bg-violet-500/12 text-violet-100",
+      iconWrap: "border-violet-300/20 bg-violet-500/10 text-violet-200",
+      bar: "from-violet-400 to-fuchsia-300",
+    },
+    blue: {
+      pill: "border-blue-300/25 bg-blue-500/12 text-blue-100",
+      iconWrap: "border-blue-300/20 bg-blue-500/10 text-blue-200",
+      bar: "from-blue-400 to-indigo-300",
+    },
+  }[tone];
+}
+
+function OverallSignalTile({ signal }: { signal: OverallSignal }) {
+  const Icon = signal.icon;
+  const styles = toneClasses(signal.tone);
+
+  return (
+    <div className="rounded-2xl border border-slate-700/65 bg-slate-950/50 p-3.5 transition duration-300 hover:border-slate-500/70">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{signal.label}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-100">{signal.value}%</p>
+        </div>
+        <div className={`rounded-2xl border p-2.5 ${styles.iconWrap}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-slate-400">{signal.hint}</p>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-900/90">
+        <div className={`h-full rounded-full bg-linear-to-r ${styles.bar}`} style={{ width: `${signal.value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function OverallSignalBar({ signal }: { signal: OverallSignal }) {
+  const Icon = signal.icon;
+  const styles = toneClasses(signal.tone);
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-2 text-sm text-slate-300">
+          <span className={`rounded-full border p-1 ${styles.iconWrap}`}>
+            <Icon className="h-3 w-3" />
+          </span>
+          {signal.label}
+        </span>
+        <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${styles.pill}`}>{signal.value}%</span>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-900/90">
+        <div className={`h-full rounded-full bg-linear-to-r ${styles.bar}`} style={{ width: `${signal.value}%` }} />
+      </div>
+    </div>
   );
 }

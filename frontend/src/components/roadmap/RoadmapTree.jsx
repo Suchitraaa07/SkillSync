@@ -5,6 +5,45 @@ import { Connector } from "@/components/roadmap/Connector";
 import { NodeCard } from "@/components/roadmap/NodeCard";
 import { RightPanel } from "@/components/roadmap/RightPanel";
 
+const ROADMAP_PROGRESS_STORAGE_KEY = "skillsync_roadmap_progress";
+const ROADMAP_PROGRESS_UPDATED_EVENT = "skillsync-roadmap-progress-updated";
+
+function getRoleStorageKey(roleLabel) {
+  return String(roleLabel || "frontend")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+}
+
+function readStoredRoadmapProgress() {
+  if (typeof window === "undefined") {
+    return { activeRoleKey: null, snapshots: {} };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ROADMAP_PROGRESS_STORAGE_KEY);
+    if (!raw) return { activeRoleKey: null, snapshots: {} };
+
+    const parsed = JSON.parse(raw);
+    return {
+      activeRoleKey: typeof parsed?.activeRoleKey === "string" ? parsed.activeRoleKey : null,
+      snapshots: parsed?.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {},
+    };
+  } catch {
+    return { activeRoleKey: null, snapshots: {} };
+  }
+}
+
+function sanitizeProgress(progressById, nodeLookup) {
+  if (!progressById || typeof progressById !== "object") return {};
+
+  return Object.fromEntries(
+    Object.entries(progressById).filter(([nodeId, status]) => {
+      return nodeLookup.has(nodeId) && ["not_started", "in_progress", "completed"].includes(status);
+    })
+  );
+}
+
 function cleanLabel(node) {
   const label = String(node?.data?.label || "").trim();
   if (!label || label.toLowerCase() === "vertical node") return "";
@@ -199,13 +238,62 @@ export function RoadmapTree({ nodes, edges, roleLabel }) {
   const [selectedId, setSelectedId] = useState(null);
   const [progressById, setProgressById] = useState({});
   const [activeTab, setActiveTab] = useState("resources");
+  const [hasHydratedProgress, setHasHydratedProgress] = useState(false);
   const { root, nodeLookup, childrenMap, parentMap } = useMemo(() => buildUnifiedTree(nodes, edges), [nodes, edges]);
   const selectedNode = selectedId ? nodeLookup.get(selectedId) : null;
+  const roleStorageKey = useMemo(() => getRoleStorageKey(roleLabel), [roleLabel]);
 
   useEffect(() => {
-    setProgressById({});
-    setSelectedId(root.children?.[0]?.id || null);
-  }, [roleLabel, root]);
+    setHasHydratedProgress(false);
+
+    const stored = readStoredRoadmapProgress();
+    const snapshot = stored.snapshots?.[roleStorageKey];
+    const nextProgress = sanitizeProgress(snapshot?.progressById, nodeLookup);
+    const nextSelectedId =
+      snapshot?.selectedId && nodeLookup.has(snapshot.selectedId) ? snapshot.selectedId : root.children?.[0]?.id || null;
+
+    setProgressById(nextProgress);
+    setSelectedId(nextSelectedId);
+    setHasHydratedProgress(true);
+  }, [nodeLookup, roleStorageKey, root]);
+
+  useEffect(() => {
+    if (!hasHydratedProgress || typeof window === "undefined") return;
+
+    const statuses = Object.values(progressById);
+    const totalTasks = nodeLookup.size;
+    const completedTasks = statuses.filter((status) => status === "completed").length;
+    const inProgressTasks = statuses.filter((status) => status === "in_progress").length;
+    const notStartedTasks = Math.max(0, totalTasks - completedTasks - inProgressTasks);
+    const pendingTasks = Math.max(0, totalTasks - completedTasks);
+    const overallProgress = totalTasks ? Math.round(((completedTasks + inProgressTasks * 0.5) / totalTasks) * 100) : 0;
+
+    const snapshot = {
+      roleKey: roleStorageKey,
+      roleLabel,
+      selectedId,
+      progressById,
+      totalTasks,
+      completedTasks,
+      inProgressTasks,
+      notStartedTasks,
+      pendingTasks,
+      overallProgress,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const stored = readStoredRoadmapProgress();
+    const nextStore = {
+      activeRoleKey: roleStorageKey,
+      snapshots: {
+        ...stored.snapshots,
+        [roleStorageKey]: snapshot,
+      },
+    };
+
+    window.localStorage.setItem(ROADMAP_PROGRESS_STORAGE_KEY, JSON.stringify(nextStore));
+    window.dispatchEvent(new CustomEvent(ROADMAP_PROGRESS_UPDATED_EVENT, { detail: snapshot }));
+  }, [hasHydratedProgress, nodeLookup.size, progressById, roleLabel, roleStorageKey, selectedId]);
 
   const onNodeClick = (node, isLocked) => {
     setSelectedId(node.id);
