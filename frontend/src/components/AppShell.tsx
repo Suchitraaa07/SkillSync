@@ -13,6 +13,11 @@ import {
   Map,
   Settings,
   Shield,
+<<<<<<< HEAD
+=======
+  Sparkles,
+  TrendingUp,
+>>>>>>> 588573b (Saving work before syncing)
   Target,
   UserCircle2,
   X,
@@ -34,7 +39,8 @@ const featureLinks = [
 ];
 
 const moreLinks = [
-  { href: "/dashboard", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/progress", label: "Progress Tracker", icon: TrendingUp },
 ];
 
 function SidebarLink({
