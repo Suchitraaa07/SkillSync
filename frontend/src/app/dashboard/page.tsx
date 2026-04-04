@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState, type ComponentType } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -14,6 +14,8 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Card } from "@/components/Card";
+import { ReadinessScore } from "@/components/ReadinessScore";
+import { SkillGapDetection } from "@/components/SkillGapDetection";
 import { api } from "@/lib/api";
 
 type ReadinessResponse = {
@@ -31,14 +33,51 @@ type ReadinessResponse = {
   gamification: { level: string; xp: number };
 };
 
+type AnalyzeReadinessResponse = {
+  score: number;
+  readinessLevel: string;
+  matchedSkills: string[];
+  missingSkills: string[];
+  totalGaps: number;
+};
+
+const ROLE_OPTIONS = [
+  "Full Stack Developer",
+  "Frontend Developer",
+  "Backend Developer",
+  "Data Analyst",
+  "AI Engineer",
+];
+
 export default function DashboardPage() {
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [roleFit, setRoleFit] = useState<{ role: string; fit: number }[]>([]);
   const [file, setFile] = useState<File | null>(null);
+  const [resumeText, setResumeText] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
-  const [roleTitle, setRoleTitle] = useState("Web Dev Intern");
+  const [roleTitle, setRoleTitle] = useState("Full Stack Developer");
   const [status, setStatus] = useState("");
+  const [readinessAnalysis, setReadinessAnalysis] = useState<AnalyzeReadinessResponse | null>(null);
+  const [isAnalyzingReadiness, setIsAnalyzingReadiness] = useState(false);
+
+  const runReadinessAnalysis = async (rawResumeText: string, selectedRole: string) => {
+    if (!rawResumeText.trim() || !selectedRole) return;
+
+    try {
+      setIsAnalyzingReadiness(true);
+      const response = await api.post<AnalyzeReadinessResponse>("/api/analyze-readiness", {
+        resumeText: rawResumeText,
+        selectedRole,
+      });
+      setReadinessAnalysis(response.data);
+    } catch (error: any) {
+      setReadinessAnalysis(null);
+      setStatus(error?.response?.data?.message || "Readiness analysis failed");
+    } finally {
+      setIsAnalyzingReadiness(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -55,7 +94,20 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
+    if (typeof window !== "undefined") {
+      const storedText = localStorage.getItem("skillsync_resume_text") || "";
+      setResumeText(storedText);
+      if (storedText) {
+        runReadinessAnalysis(storedText, roleTitle);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (resumeText.trim()) {
+      runReadinessAnalysis(resumeText, roleTitle);
+    }
+  }, [roleTitle]);
 
   const onUploadResume = async (e: FormEvent) => {
     e.preventDefault();
@@ -69,7 +121,20 @@ export default function DashboardPage() {
       await api.post("/upload-resume", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setStatus("Resume analyzed. Now analyze a job description.");
+
+      const textFormData = new FormData();
+      textFormData.append("resume", file);
+      const textRes = await api.post<{ text: string }>("/pdf/upload", textFormData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const extractedText = textRes.data?.text || "";
+      setResumeText(extractedText);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("skillsync_resume_text", extractedText);
+      }
+
+      await runReadinessAnalysis(extractedText, roleTitle);
+      setStatus("Resume analyzed. Skill gap and readiness score updated.");
     } catch (error: any) {
       setStatus(error?.response?.data?.message || "Resume upload failed");
     }
@@ -158,10 +223,80 @@ export default function DashboardPage() {
               <FeatureTile title="Learning Roadmap" desc="Get a weekly path to become internship-ready" icon={Target} href="/roadmap" action="View Roadmap" />
             </Card>
             <Card className="border-fuchsia-400/25 bg-[linear-gradient(180deg,rgba(131,24,67,0.28),rgba(10,14,28,0.94))]">
-              <FeatureTile title="Readiness Score" desc="Track your overall internship readiness" icon={Shield} href="/dashboard" action="See Score" />
+              <FeatureTile title="Readiness Score" desc="Track your overall internship readiness" icon={Shield} href="/readiness-analysis" action="See Score" />
             </Card>
           </div>
         </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+          <Card title="Analyze Readiness By Role">
+            <form onSubmit={onUploadResume} className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Select Role
+                  </label>
+                  <select
+                    value={roleTitle}
+                    onChange={(e) => setRoleTitle(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                  >
+                    {ROLE_OPTIONS.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Upload Resume (PDF)
+                  </label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-3 file:py-1 file:text-cyan-100"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="rounded-xl border border-cyan-400/35 bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30"
+              >
+                Upload Resume & Analyze
+              </button>
+            </form>
+          </Card>
+
+          <Card title="Analysis Status">
+            <p className="text-sm text-slate-300">
+              {isAnalyzingReadiness
+                ? "Analyzing readiness and skill gaps..."
+                : readinessAnalysis
+                  ? `Role: ${roleTitle} · Score: ${readinessAnalysis.score}% · ${readinessAnalysis.readinessLevel}`
+                  : "Upload a resume and select a role to generate skill gap + readiness insights."}
+            </p>
+            <p className="mt-3 text-xs text-slate-500">
+              Resume text source: {resumeText ? "Extracted and available" : "Not available yet"}
+            </p>
+          </Card>
+        </section>
+
+        {readinessAnalysis ? (
+          <section className="grid gap-4 xl:grid-cols-2">
+            <SkillGapDetection
+              matchedSkills={readinessAnalysis.matchedSkills}
+              missingSkills={readinessAnalysis.missingSkills}
+              totalGaps={readinessAnalysis.totalGaps}
+            />
+            <ReadinessScore
+              score={readinessAnalysis.score}
+              readinessLevel={readinessAnalysis.readinessLevel}
+            />
+          </section>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Overall Score" value={`${score}%`} hint={readiness?.readiness.category || "No score yet"} />

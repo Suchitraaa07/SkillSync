@@ -57,13 +57,21 @@ export default function ResumeOptimizer() {
       const response = await api.post<{ text: string; insights?: ResumeInsights }>("/pdf/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      const persistFormData = new FormData();
+      persistFormData.append("resume", file);
+      await api.post("/upload-resume", persistFormData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       const extractedText = response.data?.text || "";
+      if (typeof window !== "undefined") {
+        localStorage.setItem("skillsync_resume_text", extractedText);
+      }
       setInsights(response.data?.insights || null);
       if (!extractedText.trim()) {
         setStatus("Upload completed, but no readable text was found in this PDF.");
       } else {
-        setStatus("Resume uploaded successfully. Text extracted below.");
+        setStatus("Resume uploaded successfully. Text extracted and saved for role comparison.");
       }
       setResult(extractedText);
     } catch (error: any) {

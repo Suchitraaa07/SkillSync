@@ -30,10 +30,10 @@ const primaryLinks = [
 
 const featureLinks = [
   { href: "/resume-optimizer", label: "Resume Analysis", icon: FileText },
-  { href: "/dashboard", label: "Job Role Comparison", icon: Layers },
+  { href: "/job-role-comparison", label: "Job Role Comparison", icon: Layers },
   { href: "/skill-gap", label: "Skill Gap Detection", icon: Gauge },
   { href: "/roadmap", label: "Learning Roadmap", icon: Map },
-  { href: "/dashboard", label: "Readiness Score", icon: Shield },
+  { href: "/readiness-analysis", label: "Readiness Score", icon: Shield },
 ];
 
 const moreLinks = [

@@ -122,6 +122,61 @@ const getResumeOptimizationFromText = async ({ resumeText }) => {
   }
 };
 
+const generateQuestions = async (role, skills = []) => {
+  const fallback = buildFallbackQuestions(role, skills);
+  if (!process.env.OPENAI_API_KEY) return fallback;
+
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o-mini",
+        temperature: 0.5,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You generate interview questions for interns. Return strict JSON with key questions. The array must have exactly 3 items: one technical, one project-based, one conceptual. Each item must include id, type ('text' or 'mcq'), category, question, and options (string[] only when type is 'mcq').",
+          },
+          {
+            role: "user",
+            content: `Role: ${role}\nCandidate skills: ${skills.join(", ") || "none"}\nGenerate exactly 3 focused interview questions.`,
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const raw = response.data.choices?.[0]?.message?.content?.trim() || "";
+    const parsed = safeParseJson(raw);
+    if (!parsed?.questions || !Array.isArray(parsed.questions)) return fallback;
+
+    const normalized = parsed.questions
+      .slice(0, 3)
+      .map((item, index) => ({
+        id: String(item.id || `q${index + 1}`),
+        type: item.type === "mcq" ? "mcq" : "text",
+        category: String(item.category || (index === 0 ? "technical" : index === 1 ? "project" : "conceptual")),
+        question: String(item.question || "").trim(),
+        options:
+          item.type === "mcq" && Array.isArray(item.options)
+            ? item.options.map((opt) => String(opt)).filter(Boolean).slice(0, 5)
+            : undefined,
+      }))
+      .filter((q) => q.question);
+
+    if (normalized.length < 3) return fallback;
+    return normalized;
+  } catch (_error) {
+    return fallback;
+  }
+};
+
 const safeParseJson = (value) => {
   if (!value) return null;
   const direct = tryParse(value);
@@ -175,8 +230,39 @@ const buildFallbackResumeOptimization = (resumeText = "") => {
   };
 };
 
+const buildFallbackQuestions = (role, skills = []) => {
+  const primarySkill = skills[0] || "core programming";
+  return [
+    {
+      id: "q1",
+      type: "text",
+      category: "technical",
+      question: `For a ${role}, explain how you would solve a DSA-style problem using ${primarySkill}. Focus on approach and time complexity.`,
+    },
+    {
+      id: "q2",
+      type: "text",
+      category: "project",
+      question: `Describe one project where you used ${skills.slice(0, 3).join(", ") || "relevant tools"} and explain your personal contribution and impact.`,
+    },
+    {
+      id: "q3",
+      type: "mcq",
+      category: "conceptual",
+      question: `Which practice best improves code quality for a ${role}?`,
+      options: [
+        "Write tests and review edge cases before shipping",
+        "Skip testing if code works locally",
+        "Push directly without peer review",
+        "Avoid documentation to save time",
+      ],
+    },
+  ];
+};
+
 module.exports = {
   getExplainableFeedback,
   generateInterviewFollowup,
   getResumeOptimizationFromText,
+  generateQuestions,
 };
