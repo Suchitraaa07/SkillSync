@@ -1,0 +1,5 @@
+Software Engineering Intern
+
+We are looking for a Software Engineering Intern with strong fundamentals in JavaScript, React, Next.js, Node.js, and MongoDB. Experience building REST APIs and deploying cloud-native apps is preferred. Familiarity with testing, Git workflows, and problem solving in team environments is essential.
+
+Bonus: Docker, AWS, CI/CD, and system design knowledge.

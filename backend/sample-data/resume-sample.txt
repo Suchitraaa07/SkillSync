@@ -1,0 +1,16 @@
+Aarav Sharma
+Email: aarav@example.com
+
+Summary:
+Final-year computer science student focused on full-stack web development and cloud-native applications.
+
+Skills:
+JavaScript, TypeScript, React, Next.js, Node.js, Express, MongoDB, SQL, Git, Docker
+
+Projects:
+- Built a full-stack mentorship platform using Next.js, Express, and MongoDB with JWT auth and role-based routing.
+- Developed internship tracker dashboard with data visualizations and analytics widgets.
+- Implemented REST APIs for profile management and recommendation workflows.
+
+Experience:
+- 1 year internship experience in frontend development.
