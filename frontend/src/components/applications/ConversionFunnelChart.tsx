@@ -37,7 +37,7 @@ export function ConversionFunnelChart({ data }: ConversionFunnelChartProps) {
               borderRadius: "12px",
               color: "#e2e8f0",
             }}
-            formatter={(value: number) => [`${value}`, "Reached"]}
+            formatter={(value) => [`${Number(value ?? 0)}`, "Reached"]}
           />
           <Bar dataKey="value" radius={[12, 12, 0, 0]} barSize={34}>
             {data.map((entry, index) => (

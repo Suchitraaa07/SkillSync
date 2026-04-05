@@ -42,13 +42,15 @@ export function RoleSuccessChart({ data }: RoleSuccessChartProps) {
               borderRadius: "12px",
               color: "#e2e8f0",
             }}
-            formatter={(value: number, _name, item: { payload?: { total?: number } }) => [
-              `${value}%`,
-              `${item?.payload?.total || 0} applications`,
+            formatter={(value, _name, item) => [
+              `${Number(value ?? 0)}%`,
+              `${(item && typeof item === "object" && "payload" in item && item.payload && typeof item.payload === "object" && "total" in item.payload
+                ? Number((item.payload as { total?: number }).total ?? 0)
+                : 0)} applications`,
             ]}
           />
           <Bar dataKey="value" fill="#34d399" radius={[0, 12, 12, 0]} barSize={24}>
-            <LabelList dataKey="value" position="right" formatter={(value: number) => `${value}%`} fill="#a7f3d0" />
+            <LabelList dataKey="value" position="right" formatter={(value) => `${Number(value ?? 0)}%`} fill="#a7f3d0" />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

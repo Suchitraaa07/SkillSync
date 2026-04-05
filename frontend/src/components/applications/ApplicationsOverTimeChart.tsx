@@ -34,7 +34,11 @@ export function ApplicationsOverTimeChart({ data }: ApplicationsOverTimeChartPro
           <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 12 }} axisLine={false} tickLine={false} />
           <YAxis allowDecimals={false} tick={{ fill: "#94a3b8", fontSize: 12 }} axisLine={false} tickLine={false} width={30} />
-          <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7dd3fc" }} formatter={(value: number) => [`${value}`, "Applications"]} />
+          <Tooltip
+            contentStyle={tooltipStyle}
+            labelStyle={{ color: "#7dd3fc" }}
+            formatter={(value) => [`${Number(value ?? 0)}`, "Applications"]}
+          />
           <Line
             type="monotone"
             dataKey="value"
