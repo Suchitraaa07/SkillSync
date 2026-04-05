@@ -1,11 +1,16 @@
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { connectDB } = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const analysisRoutes = require("./routes/analysisRoutes");
+const applicationRoutes = require("./routes/applicationRoutes");
 const trackerRoutes = require("./routes/trackerRoutes");
 const pdfRoutes = require("./routes/pdfRoutes");
+const interviewRoutes = require("./routes/interviewRoutes");
 
 dotenv.config();
 
@@ -35,8 +40,10 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/applications", applicationRoutes);
 app.use("/", analysisRoutes);
 app.use("/", trackerRoutes);
+app.use("/", interviewRoutes);
 
 app.use((err, _req, res, _next) => {
   return res.status(500).json({ message: err.message || "Internal server error" });
