@@ -37,7 +37,7 @@ export function ReferralImpactChart({ data }: ReferralImpactChartProps) {
               borderRadius: "12px",
               color: "#e2e8f0",
             }}
-            formatter={(value: number) => [`${value}%`, "Success rate"]}
+            formatter={(value) => [`${Number(value ?? 0)}%`, "Success rate"]}
           />
           <Bar dataKey="value" radius={[12, 12, 0, 0]} barSize={42}>
             {data.map((entry, index) => (
