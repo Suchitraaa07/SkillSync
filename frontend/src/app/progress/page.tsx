@@ -177,17 +177,26 @@ export default function ProgressPage() {
       if (!raw) return;
 
       const parsed = JSON.parse(raw);
-      setHiddenUpcomingProjectIds(Array.isArray(parsed?.hiddenIds) ? parsed.hiddenIds.filter((item) => typeof item === "string") : []);
+      setHiddenUpcomingProjectIds(
+        Array.isArray(parsed?.hiddenIds)
+          ? parsed.hiddenIds.filter((item: unknown): item is string => typeof item === "string")
+          : []
+      );
       setCustomUpcomingProjects(
         Array.isArray(parsed?.customProjects)
           ? parsed.customProjects.filter(
-              (item) =>
-                item &&
-                typeof item.id === "string" &&
-                typeof item.weekLabel === "string" &&
-                typeof item.focus === "string" &&
-                typeof item.project === "string" &&
-                Array.isArray(item.resources)
+              (item: unknown): item is UpcomingProjectItem => {
+                if (!item || typeof item !== "object") return false;
+                const candidate = item as Record<string, unknown>;
+
+                return (
+                  typeof candidate.id === "string" &&
+                  typeof candidate.weekLabel === "string" &&
+                  typeof candidate.focus === "string" &&
+                  typeof candidate.project === "string" &&
+                  Array.isArray(candidate.resources)
+                );
+              }
             )
           : []
       );
