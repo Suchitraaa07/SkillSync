@@ -13,6 +13,7 @@ const {
   generateQuestionsForRole,
   resumeOptimizer,
   extensionAnalyze,
+  extensionResumeAnalyze,
 } = require("../controllers/analysisController");
 const { interview } = require("../controllers/interviewController");
 const { getJobs } = require("../controllers/jobsController");
@@ -34,5 +35,6 @@ router.get("/resume-optimize", authMiddleware, resumeOptimizer);
 router.post("/interview", authMiddleware, interview);
 
 router.post("/extension/analyze", extensionAnalyze);
+router.post("/extension/resume-analyze", extensionResumeAnalyze);
 
 module.exports = router;

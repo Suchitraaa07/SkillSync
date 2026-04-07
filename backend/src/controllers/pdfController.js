@@ -9,8 +9,17 @@ exports.uploadPDF = async (req, res) => {
 
   try {
     const text = await parsePDF(req.file.path);
-    const insights = await getResumeOptimizationFromText({ resumeText: text });
-    return res.json({ text, insights });
+    let insights = null;
+    let warning = null;
+
+    try {
+      insights = await getResumeOptimizationFromText({ resumeText: text });
+    } catch (insightError) {
+      // Do not fail PDF parsing if AI insight generation is unavailable.
+      warning = insightError?.message || "Insights unavailable";
+    }
+
+    return res.json({ text, insights, warning });
   } catch (err) {
     return res.status(500).json({ error: err.message || "Failed to parse PDF" });
   } finally {

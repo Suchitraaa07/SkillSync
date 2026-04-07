@@ -7,7 +7,8 @@
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://internshala.com/*",
-    "http://localhost:5000/*"
+    "http://localhost:5000/*",
+    "https://*.onrender.com/*"
   ],
   "action": {
     "default_popup": "popup.html"
