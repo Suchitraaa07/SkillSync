@@ -319,6 +319,103 @@ const extensionAnalyze = async (req, res) => {
   }
 };
 
+const extensionResumeAnalyze = async (req, res) => {
+  try {
+    const resumeText = String(req.body?.resumeText || "");
+    const profile = req.body?.profile || {};
+
+    if (!resumeText.trim()) {
+      return res.status(400).json({ message: "resumeText is required" });
+    }
+
+    const text = resumeText.toLowerCase();
+    const highlights = [];
+    const missing = [];
+    let score = 35;
+
+    const hasEmail = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(resumeText) || Boolean(profile.email);
+    const hasPhone = /(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}/.test(resumeText) || Boolean(profile.phone);
+    const hasLinkedin = /linkedin\.com\//.test(text) || Boolean(profile.linkedin);
+    const hasGithub = /github\.com\//.test(text) || Boolean(profile.github);
+    const hasProjects = /project|portfolio|built|developed/.test(text);
+    const hasExperience = /experience|intern|worked|freelance/.test(text);
+    const hasEducation = /education|b\.?tech|bachelor|university|college/.test(text);
+    const hasSkillsSection = /skills|technical skills|tech stack/.test(text);
+
+    if (hasEmail) {
+      score += 8;
+      highlights.push("Email present");
+    } else {
+      missing.push("Add professional email");
+    }
+
+    if (hasPhone) {
+      score += 6;
+      highlights.push("Phone number present");
+    } else {
+      missing.push("Add phone number");
+    }
+
+    if (hasLinkedin) {
+      score += 7;
+      highlights.push("LinkedIn profile present");
+    } else {
+      missing.push("Add LinkedIn URL");
+    }
+
+    if (hasGithub) {
+      score += 7;
+      highlights.push("GitHub profile present");
+    } else {
+      missing.push("Add GitHub URL");
+    }
+
+    if (hasProjects) {
+      score += 10;
+      highlights.push("Project section detected");
+    } else {
+      missing.push("Add 2-3 project bullets with measurable impact");
+    }
+
+    if (hasExperience) {
+      score += 8;
+      highlights.push("Experience section detected");
+    } else {
+      missing.push("Add internship/freelance/experience details");
+    }
+
+    if (hasEducation) {
+      score += 8;
+      highlights.push("Education section detected");
+    } else {
+      missing.push("Add education details");
+    }
+
+    if (hasSkillsSection) {
+      score += 8;
+      highlights.push("Skills section detected");
+    } else {
+      missing.push("Add a clear skills section");
+    }
+
+    const recommendedKeywords =
+      text.match(/javascript|typescript|react|node\.js|python|sql|mongodb|aws|docker|git/g) || [];
+
+    return res.json({
+      score: Math.min(100, Math.max(0, score)),
+      highlights: [...new Set(highlights)],
+      missing: [...new Set(missing)],
+      extractedSkills: [...new Set(recommendedKeywords)],
+      recommendation:
+        score >= 75
+          ? "Resume looks strong for internship applications. Keep tailoring per role."
+          : "Improve the missing sections, then retry analysis for a stronger auto-apply profile.",
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Extension resume analysis failed" });
+  }
+};
+
 module.exports = {
   uploadResume,
   analyzeJob,
@@ -331,4 +428,5 @@ module.exports = {
   generateQuestionsForRole,
   resumeOptimizer,
   extensionAnalyze,
+  extensionResumeAnalyze,
 };

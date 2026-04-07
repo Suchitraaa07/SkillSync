@@ -11,9 +11,9 @@ import {
   Layers,
   LogOut,
   Map,
+  Menu,
   Settings,
   Shield,
-  Sparkles,
   TrendingUp,
   Target,
   UserCircle2,
@@ -38,6 +38,14 @@ const featureLinks = [
 const moreLinks = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/progress", label: "Progress Tracker", icon: TrendingUp },
+];
+
+const mobileTabs = [
+  { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/resume-optimizer", label: "Resume", icon: FileText },
+  { href: "/skill-gap", label: "Skill Gap", icon: Gauge },
+  { href: "/roadmap", label: "Roadmap", icon: Map },
+  { href: "/progress", label: "Progress", icon: TrendingUp },
 ];
 
 function SidebarLink({
@@ -83,6 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
   const [connectStatus, setConnectStatus] = useState("");
   const [isSavingProfiles, setIsSavingProfiles] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const connectedCount = [profileLinks.linkedin, profileLinks.github, profileLinks.leetcode].filter(
     (value) => value.trim().length > 0
@@ -103,6 +112,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       // Ignore malformed profile data and keep defaults.
     }
   }, []);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   const onSaveProfiles = async () => {
     if (typeof window === "undefined") return;
@@ -146,7 +159,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,rgba(55,65,210,0.16),transparent_38%),radial-gradient(circle_at_80%_10%,rgba(59,130,246,0.12),transparent_34%),linear-gradient(180deg,#050816,#0a1022)] text-slate-100">
       <div className="mx-auto grid min-h-screen w-full max-w-[1400px] grid-cols-1 gap-4 p-3 md:p-4 lg:grid-cols-[265px_1fr]">
-        <aside className="rounded-[24px] border border-slate-700/60 bg-slate-950/85 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <aside className="hidden rounded-[24px] border border-slate-700/60 bg-slate-950/85 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:block">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-indigo-500/15 p-2.5 ring-1 ring-indigo-300/25">
               <Target className="h-5 w-5 text-indigo-300" />
@@ -203,13 +216,33 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </aside>
 
-        <main className="rounded-[24px] border border-slate-700/60 bg-slate-950/55 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl md:p-6">
+        <main className="rounded-[24px] border border-slate-700/60 bg-slate-950/55 p-4 pb-24 shadow-[0_20px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl md:p-6 md:pb-6">
+          <div className="mb-4 flex items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/85 px-3 py-2.5 lg:hidden">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="rounded-lg border border-slate-700 bg-slate-950/90 p-2 text-slate-200"
+              aria-label="Open navigation"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-white">SkillSync</p>
+              <p className="text-[11px] text-slate-400">{user?.name?.split(" ")[0] || "Student"}</p>
+            </div>
+            <button
+              onClick={() => setShowConnectModal(true)}
+              className="rounded-lg border border-indigo-400/30 bg-indigo-500/20 px-2.5 py-1.5 text-xs font-medium text-indigo-100"
+            >
+              Connect
+            </button>
+          </div>
+
           <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-white">Welcome back, {user?.name?.split(" ")[0] || "Student"}! </h2>
               <p className="mt-1 text-sm text-slate-400">Your AI-powered career analysis at a glance.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 lg:flex">
               <button
                 onClick={() => setShowConnectModal(true)}
                 className="rounded-xl border border-indigo-400/30 bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-100 hover:bg-indigo-500/30"
@@ -288,6 +321,80 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       ) : null}
+
+      {mobileNavOpen ? (
+        <div className="fixed inset-0 z-40 bg-slate-950/75 backdrop-blur-sm lg:hidden" onClick={() => setMobileNavOpen(false)}>
+          <div
+            className="h-full w-[85%] max-w-xs border-r border-slate-700/70 bg-slate-950/95 p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-white">SkillSync</h3>
+                <p className="text-xs text-slate-400">Your Career Co-Pilot</p>
+              </div>
+              <button
+                onClick={() => setMobileNavOpen(false)}
+                className="rounded-lg border border-slate-700 p-2 text-slate-300"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <nav className="space-y-2">
+              {primaryLinks.map((link) => (
+                <SidebarLink key={link.label} {...link} pathname={pathname} />
+              ))}
+              {featureLinks.map((link) => (
+                <SidebarLink key={link.label} {...link} pathname={pathname} />
+              ))}
+              {moreLinks.map((link) => (
+                <SidebarLink key={link.label} {...link} pathname={pathname} />
+              ))}
+            </nav>
+
+            <button
+              onClick={() => setShowConnectModal(true)}
+              className="mt-4 w-full rounded-xl border border-indigo-400/30 bg-indigo-500/20 px-3 py-2.5 text-sm font-medium text-indigo-100"
+            >
+              Connect Profiles ({connectedCount}/3)
+            </button>
+
+            <button
+              onClick={() => {
+                authStore.logout();
+                router.push("/login");
+              }}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-100"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-700/80 bg-slate-950/96 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
+          {mobileTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = pathname === tab.href;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={`flex flex-col items-center justify-center rounded-xl px-1 py-1.5 text-[10px] font-medium transition ${
+                  isActive ? "bg-indigo-500/20 text-indigo-100" : "text-slate-400"
+                }`}
+              >
+                <Icon className={`mb-1 h-4 w-4 ${isActive ? "text-indigo-300" : "text-slate-500"}`} />
+                <span className="truncate">{tab.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

@@ -4,21 +4,88 @@
   <meta charset="UTF-8" />
   <title>SkillSync Assistant</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      width: 340px;
-      background: #f8fafc;
-      color: #0f172a;
+    :root {
+      --bg-1: #050816;
+      --bg-2: #0a1022;
+      --card: rgba(2, 6, 23, 0.78);
+      --card-border: rgba(100, 116, 139, 0.32);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-strong: #0ea5e9;
+      --accent: #14b8a6;
     }
-    .wrap { padding: 14px; }
+
+    body {
+      font-family: "Segoe UI", "Inter", sans-serif;
+      margin: 0;
+      width: 390px;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(55, 65, 210, 0.24), transparent 38%),
+        radial-gradient(circle at 80% 8%, rgba(56, 189, 248, 0.18), transparent 34%),
+        linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      color: var(--text);
+    }
+
+    .wrap {
+      padding: 14px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(15, 23, 42, 0.4));
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      color: #e0f2fe;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 11px;
+      color: #bae6fd;
+    }
+
+    .pill {
+      padding: 4px 8px;
+      font-size: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(125, 211, 252, 0.42);
+      color: #bfdbfe;
+      background: rgba(30, 41, 59, 0.65);
+    }
+
     .card {
-      background: white;
+      background: var(--card);
       border-radius: 12px;
       padding: 12px;
       margin-bottom: 10px;
-      box-shadow: 0 2px 10px rgba(2, 6, 23, 0.07);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 12px 26px rgba(2, 6, 23, 0.34);
+      backdrop-filter: blur(8px);
     }
+
+    .section-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #a5b4fc;
+    }
+
     button {
       width: 100%;
       border: none;
@@ -27,34 +94,160 @@
       font-weight: 700;
       cursor: pointer;
       margin-top: 8px;
+      transition: transform 0.12s ease, filter 0.12s ease;
     }
-    #analyze { background: #0f172a; color: white; }
-    #autofill { background: #0f766e; color: white; }
-    input {
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    .btn-muted {
+      background: rgba(51, 65, 85, 0.9);
+      color: #e2e8f0;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    .btn-primary {
+      background: linear-gradient(120deg, var(--primary), var(--primary-strong));
+      color: #03111c;
+      border: 1px solid rgba(125, 211, 252, 0.45);
+    }
+
+    .btn-accent {
+      background: linear-gradient(120deg, var(--accent), #0d9488);
+      color: #e6fffb;
+      border: 1px solid rgba(45, 212, 191, 0.38);
+    }
+
+    #analyzeResume {
+      background: linear-gradient(120deg, #334155, #1e293b);
+      color: #dbeafe;
+      border: 1px solid rgba(125, 211, 252, 0.28);
+    }
+
+    input, textarea, select {
       width: 100%;
       padding: 8px;
       border-radius: 8px;
-      border: 1px solid #cbd5e1;
+      border: 1px solid rgba(100, 116, 139, 0.45);
+      background: rgba(15, 23, 42, 0.72);
+      color: var(--text);
+      box-sizing: border-box;
+      margin-top: 6px;
+      outline: none;
     }
-    .small { font-size: 12px; color: #475569; }
-    .metric { font-size: 24px; font-weight: 800; margin: 6px 0; }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #64748b;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: rgba(56, 189, 248, 0.68);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+    }
+
+    textarea {
+      min-height: 74px;
+      resize: vertical;
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .metric {
+      font-size: 30px;
+      font-weight: 800;
+      margin: 6px 0;
+      color: #e0f2fe;
+      text-shadow: 0 0 18px rgba(56, 189, 248, 0.28);
+    }
+
+    .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .row input { width: auto; margin-top: 0; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    #resumeInsights { margin-top: 8px; white-space: pre-line; }
+
+    #scoreLabel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    #scoreBadge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(56, 189, 248, 0.38);
+      color: #bae6fd;
+      background: rgba(8, 47, 73, 0.5);
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <div class="small">Backend API URL</div>
-      <input id="apiUrl" placeholder="http://localhost:5000" />
-      <button id="saveApi">Save API URL</button>
+    <div class="brand">
+      <div>
+        <h1>SkillSync Smart Apply</h1>
+        <p>AI-powered internship autofill</p>
+      </div>
+      <div class="pill">v1</div>
     </div>
 
     <div class="card">
-      <div class="small">Fit Score</div>
+      <p class="section-title">Resume Profile</p>
+      <input id="resumeFile" type="file" accept=".pdf,.txt,.md" />
+      <textarea id="resumeText" placeholder="Paste resume text or upload a .txt file"></textarea>
+      <button id="analyzeResume">Analyze Resume</button>
+      <button id="saveResume" class="btn-primary">Save Resume Profile</button>
+      <div id="resumeStatus" class="small"></div>
+      <div id="resumeInsights" class="small"></div>
+    </div>
+
+    <div class="card">
+      <p class="section-title">Your Info For Autofill</p>
+      <input id="fullName" placeholder="Full name" />
+      <div class="grid2">
+        <input id="email" placeholder="Email" />
+        <input id="phone" placeholder="Phone" />
+      </div>
+      <input id="location" placeholder="Location (City, Country)" />
+      <div class="grid2">
+        <input id="linkedin" placeholder="LinkedIn URL" />
+        <input id="github" placeholder="GitHub URL" />
+      </div>
+      <input id="portfolio" placeholder="Portfolio URL" />
+      <input id="experienceYears" type="number" min="0" step="0.5" placeholder="Years of experience" />
+      <input id="skills" placeholder="Skills comma separated (React, Node.js, SQL)" />
+      <textarea id="coverLetter" placeholder="Default cover letter answer"></textarea>
+    </div>
+
+    <div class="card">
+      <p class="section-title">Backend API URL</p>
+      <input id="apiUrl" placeholder="http://localhost:5000" />
+      <button id="saveApi" class="btn-muted">Save API URL</button>
+    </div>
+
+    <div class="card">
+      <div id="scoreLabel">
+        <p class="section-title">Fit Score</p>
+        <span id="scoreBadge">Live</span>
+      </div>
       <div id="score" class="metric">--</div>
       <div id="recommendation" class="small">Analyze current job page</div>
       <div id="missing" class="small"></div>
-      <button id="analyze">Analyze This Job</button>
-      <button id="autofill">Smart Autofill Fields</button>
+      <button id="analyze" class="btn-primary">Analyze This Job</button>
+      <div class="row">
+        <input id="autoSubmit" type="checkbox" />
+        <label for="autoSubmit" class="small">Submit final form automatically</label>
+      </div>
+      <button id="autofill" class="btn-accent">Smart Autofill + Auto Apply</button>
     </div>
   </div>
 

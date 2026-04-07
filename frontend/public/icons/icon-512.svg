@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="SkillSync icon">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="#050816"/>
+  <rect x="52" y="52" width="408" height="408" rx="90" fill="url(#bg)" opacity="0.2"/>
+  <path d="M146 311c0-62 45-108 108-108 37 0 67 14 91 40l-33 30c-16-18-32-27-58-27-38 0-65 27-65 65s27 65 65 65c27 0 44-9 61-28l31 28c-24 30-55 46-94 46-62 0-106-45-106-111z" fill="#e2e8f0"/>
+  <circle cx="370" cy="171" r="24" fill="#67e8f9"/>
+</svg>
