@@ -31,9 +31,9 @@ type ProfileIntelligenceResponse = {
     };
   };
   benchmarking: {
-    topPercentile: number;
+    topPercentile: number | null;
     dsaPercentile: number | null;
-    shortlistChance: number;
+    shortlistChance: number | null;
   };
   providers: {
     linkedin: {
@@ -292,11 +292,9 @@ export default function DashboardPage() {
     ? profileIntel.crossPlatform.insights
     : profileSignals.insights;
   const connectedCount = profileIntel?.connectedCount ?? profileSignals.connectedCount;
-  const topPercentile = profileIntel?.benchmarking?.topPercentile ?? profileSignals.benchmark.topPercentile;
-  const dsaPercentile =
-    profileIntel?.benchmarking?.dsaPercentile ?? profileSignals.benchmark.dsaPercentile;
-  const shortlistChance =
-    profileIntel?.benchmarking?.shortlistChance ?? profileSignals.benchmark.shortlistChance;
+  const topPercentile = profileIntel?.benchmarking?.topPercentile ?? null;
+  const dsaPercentile = profileIntel?.benchmarking?.dsaPercentile ?? null;
+  const shortlistChance = profileIntel?.benchmarking?.shortlistChance ?? null;
   const strengths = profileIntel?.crossPlatform?.strengths ?? profileSignals.strengths;
   const githubStats = profileIntel?.providers?.github?.stats;
   const leetcodeStats = profileIntel?.providers?.leetcode?.stats;
@@ -421,18 +419,32 @@ export default function DashboardPage() {
                   </p>
 
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    <KpiChip label="Peer Rank" value={`Top ${topPercentile}%`} tone="amber" />
+                    <KpiChip
+                      label="Peer Rank"
+                      value={topPercentile !== null ? `Top ${topPercentile}%` : "Pending"}
+                      tone="amber"
+                    />
                     <KpiChip
                       label="DSA Cohort"
                       value={dsaPercentile ? `Top ${dsaPercentile}%` : "Pending"}
                       tone="indigo"
                     />
-                    <KpiChip label="Shortlist Chance" value={`${shortlistChance}%`} tone="cyan" />
+                    <KpiChip
+                      label="Shortlist Chance"
+                      value={shortlistChance !== null ? `${shortlistChance}%` : "Pending"}
+                      tone="cyan"
+                    />
                   </div>
 
                   <div className="mt-2 space-y-1.5 rounded-[1.6rem] border border-white/8 bg-slate-950/50 p-3 backdrop-blur">
-                    <BenchRow label="Profile competitiveness" value={100 - topPercentile} />
-                    <BenchRow label="Interview readiness" value={dsaPercentile ? 100 - dsaPercentile : 35} />
+                    <BenchRow
+                      label="Profile competitiveness"
+                      value={topPercentile !== null ? 100 - topPercentile : null}
+                    />
+                    <BenchRow
+                      label="Interview readiness"
+                      value={dsaPercentile !== null ? 100 - dsaPercentile : null}
+                    />
                     <BenchRow label="Recruiter shortlist probability" value={shortlistChance} />
                   </div>
 
@@ -443,7 +455,7 @@ export default function DashboardPage() {
                   </p>
 
                   <div className="mt-2 rounded-2xl border border-white/8 bg-slate-950/50 px-3 py-2 text-sm leading-relaxed text-slate-200 backdrop-blur">
-                    {dsaPercentile
+                    {dsaPercentile !== null
                       ? "Your coding profile is benchmarked with role-aligned internship peers."
                       : "Add a valid LeetCode profile URL to enable DSA percentile benchmarking."}
                   </div>
@@ -608,14 +620,14 @@ function KpiChip({
   );
 }
 
-function BenchRow({ label, value }: { label: string; value: number }) {
-  const width = Math.max(0, Math.min(100, value));
+function BenchRow({ label, value }: { label: string; value: number | null }) {
+  const width = value === null ? 0 : Math.max(0, Math.min(100, value));
 
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-sm text-slate-300">
         <span>{label}</span>
-        <span>{Math.round(width)}%</span>
+        <span>{value === null ? "Pending" : `${Math.round(width)}%`}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-900/90">
         <div className="h-full bg-gradient-to-r from-amber-300 via-fuchsia-400 to-indigo-400" style={{ width: `${width}%` }} />

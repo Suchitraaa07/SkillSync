@@ -19,6 +19,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  const requestUrl = new URL(event.request.url);
+  const isHttpRequest = requestUrl.protocol === "http:" || requestUrl.protocol === "https:";
+  if (!isHttpRequest) return;
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
@@ -30,7 +34,12 @@ self.addEventListener("fetch", (event) => {
           }
 
           const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, responseClone))
+            .catch(() => {
+              // Ignore caching failures for unsupported or transient requests.
+            });
           return response;
         })
         .catch(() => caches.match("/"));
