@@ -200,7 +200,7 @@ const getFitHeatmap = async (req, res) => {
     (user.resumeSkills || []).map((skill) => String(skill).trim().toLowerCase())
   );
   const normalizedResumeText = String(user.resumeText || "").toLowerCase();
-  const hasResumeData = Boolean(normalizedResumeText.trim()) && normalizedUserSkills.size > 0;
+  const hasResumeData = Boolean(normalizedResumeText.trim()) || normalizedUserSkills.size > 0;
 
   if (!hasResumeData) {
     return res.json({
@@ -222,9 +222,21 @@ const getFitHeatmap = async (req, res) => {
     return { role, fit };
   });
 
+  // When explicit resumeSkills are sparse, infer visible skills from role taxonomy keywords in resume text.
+  const inferredFromText = new Set();
+  Object.values(ROLE_SKILL_MAP)
+    .flat()
+    .forEach((skill) => {
+      if (hasSkillMatch({ requiredSkill: skill, userSkills: new Set(), resumeText: normalizedResumeText })) {
+        inferredFromText.add(skill.toLowerCase());
+      }
+    });
+
+  const extractedSkills = [...new Set([...normalizedUserSkills, ...inferredFromText])];
+
   return res.json({
     needsResumeUpload: false,
-    extractedSkills: [...normalizedUserSkills],
+    extractedSkills,
     roleFit,
   });
 };

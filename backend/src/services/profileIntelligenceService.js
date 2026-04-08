@@ -149,7 +149,7 @@ const fetchGithub = async (url) => {
   }
 
   try {
-    const [userRes, reposRes, contributionStats] = await Promise.all([
+    const [userResult, reposResult, contributionResult] = await Promise.allSettled([
       axios.get(`https://api.github.com/users/${username}`, { timeout: 10000 }),
       axios.get(`https://api.github.com/users/${username}/repos`, {
         params: { per_page: 100, sort: "updated" },
@@ -158,22 +158,55 @@ const fetchGithub = async (url) => {
       fetchGithubContributions(username),
     ]);
 
-    const repos = Array.isArray(reposRes.data) ? reposRes.data : [];
-    const totalStars = repos.reduce((sum, repo) => sum + Number(repo.stargazers_count || 0), 0);
+    const userRes = userResult.status === "fulfilled" ? userResult.value : null;
+    const reposRes = reposResult.status === "fulfilled" ? reposResult.value : null;
+    const contributionStats =
+      contributionResult.status === "fulfilled"
+        ? contributionResult.value
+        : {
+            daily: getLastNDates(30).map((date) => ({ date, count: 0 })),
+            totalCommits30d: 0,
+            longestStreakDays: 0,
+            momentumPerDay: 0,
+          };
 
+    const repos = Array.isArray(reposRes?.data) ? reposRes.data : [];
+    const totalStars = repos.reduce((sum, repo) => sum + Number(repo.stargazers_count || 0), 0);
+    const publicRepos = Number(userRes?.data?.public_repos || repos.length || 0);
+    const followers = Number(userRes?.data?.followers || 0);
+
+    const hasAnySignal =
+      Boolean(userRes) ||
+      Boolean(reposRes) ||
+      contributionStats.totalCommits30d > 0 ||
+      contributionStats.longestStreakDays > 0;
+
+    if (!hasAnySignal) {
+      const userStatus = userResult.status === "rejected" ? userResult.reason?.response?.status : null;
+      const reposStatus = reposResult.status === "rejected" ? reposResult.reason?.response?.status : null;
+      const notFound = userStatus === 404 || reposStatus === 404;
+      return {
+        connected: true,
+        username,
+        stats: null,
+        message: notFound ? "GitHub profile not found" : "GitHub stats unavailable",
+      };
+    }
+
+    const partialFailure = userResult.status === "rejected" || reposResult.status === "rejected";
     return {
       connected: true,
       username,
       stats: {
-        followers: Number(userRes.data?.followers || 0),
-        publicRepos: Number(userRes.data?.public_repos || 0),
+        followers,
+        publicRepos,
         totalStars,
         totalCommits30d: contributionStats.totalCommits30d,
         longestStreakDays: contributionStats.longestStreakDays,
         momentumPerDay: contributionStats.momentumPerDay,
         dailyContributions: contributionStats.daily,
       },
-      message: "GitHub stats fetched",
+      message: partialFailure ? "GitHub stats fetched (partial data)" : "GitHub stats fetched",
     };
   } catch (error) {
     return {
@@ -397,7 +430,9 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
           6,
           95
         )
-      : 0
+      : githubData.connected && githubData.username
+        ? 10
+        : 0
     : 0;
   const lcRankingBonus =
     leetcodeData.stats?.ranking > 0 && leetcodeData.stats.ranking <= 200000 ? 12 : 0;
@@ -407,7 +442,7 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
       ? clamp(lcBase + lcSolved * 0.18 + lcMedium * 0.22 + lcRankingBonus, 6, 97)
       : 0
     : 0;
-  const linkedinSignal = linkedinData.connected ? 0 : 0;
+  const linkedinSignal = linkedinData.connected ? 18 : 0;
 
   const hasMeasuredBenchmarkData = Boolean(githubData.stats || leetcodeData.stats);
   if (!insights.length && hasMeasuredBenchmarkData) {
