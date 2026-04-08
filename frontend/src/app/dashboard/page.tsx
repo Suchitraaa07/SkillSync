@@ -537,7 +537,7 @@ export default function DashboardPage() {
               <FeatureTile title="Resume Analysis" desc="Analyze ATS score and suggest improvements" icon={BookOpen} href="/resume-optimizer" action="Analyze" accent="blue" />
             </Card>
             <Card className="group border-emerald-400/25 bg-[linear-gradient(180deg,rgba(6,78,59,0.35),rgba(10,14,28,0.94))] transition-all duration-300 hover:-translate-y-1.5 hover:border-emerald-300/40 hover:shadow-[0_28px_70px_rgba(16,185,129,0.22)]">
-              <FeatureTile title="Job Role Comparison" desc="Compare profile against role requirements" icon={BriefcaseBusiness} href="/dashboard" action="Compare" accent="emerald" />
+              <FeatureTile title="Job Role Comparison" desc="Compare profile against role requirements" icon={BriefcaseBusiness} href="/job-role-comparison" action="Compare" accent="emerald" />
             </Card>
             <Card className="group border-amber-400/25 bg-[linear-gradient(180deg,rgba(120,53,15,0.32),rgba(10,14,28,0.94))] transition-all duration-300 hover:-translate-y-1.5 hover:border-amber-300/40 hover:shadow-[0_28px_70px_rgba(245,158,11,0.22)]">
               <FeatureTile title="Skill Gap Detection" desc="Identify missing skills before applying" icon={CircleAlert} href="/skill-gap" action="Detect Gaps" accent="amber" />
