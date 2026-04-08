@@ -351,7 +351,6 @@ const fetchLinkedIn = async (url) => {
 };
 
 const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 }) => {
-  console.log("INPUT URLS:", { linkedin, github, leetcode });
   const normalized = {
     linkedin: normalizeUrl(linkedin),
     github: normalizeUrl(github),
@@ -363,8 +362,6 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
     fetchGithub(normalized.github),
     fetchLeetCode(normalized.leetcode),
   ]);
-  console.log("GITHUB DATA:", githubData);
-  console.log("LEETCODE DATA:", leetcodeData);
 
   const connectedCount = [linkedinData.connected, githubData.connected, leetcodeData.connected].filter(Boolean).length;
 
@@ -385,9 +382,6 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
   if (githubStars >= 20) {
     insights.push("Your open-source visibility is growing. Highlight starred work in your resume.");
   }
-  if (!insights.length) {
-    insights.push("Profile signals are moderate. Improve both project quality and interview problem-solving consistency.");
-  }
   if (connectedCount < 3) {
     insights.push("Connect all profiles for richer multi-platform analysis.");
   }
@@ -403,7 +397,7 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
           6,
           95
         )
-      : 8
+      : 0
     : 0;
   const lcRankingBonus =
     leetcodeData.stats?.ranking > 0 && leetcodeData.stats.ranking <= 200000 ? 12 : 0;
@@ -411,17 +405,29 @@ const analyzeProfiles = async ({ linkedin, github, leetcode, readinessScore = 0 
   const lcSignal = normalized.leetcode
     ? leetcodeData.stats
       ? clamp(lcBase + lcSolved * 0.18 + lcMedium * 0.22 + lcRankingBonus, 6, 97)
-      : 6
+      : 0
     : 0;
-  const linkedinSignal = linkedinData.connected ? 58 : 0;
+  const linkedinSignal = linkedinData.connected ? 0 : 0;
+
+  const hasMeasuredBenchmarkData = Boolean(githubData.stats || leetcodeData.stats);
+  if (!insights.length && hasMeasuredBenchmarkData) {
+    insights.push("Profile signals are moderate. Improve both project quality and interview problem-solving consistency.");
+  }
+  if (!hasMeasuredBenchmarkData) {
+    insights.push("Benchmarking requires measurable GitHub or LeetCode public stats. Connect valid profiles to enable real peer estimates.");
+  }
 
   const activeSignals = [githubSignal, lcSignal, linkedinSignal].filter((n) => n > 0);
   const avgSignal = activeSignals.length
     ? activeSignals.reduce((sum, value) => sum + value, 0) / activeSignals.length
-    : Math.max(35, readinessScore * 0.6);
+    : 0;
 
-  const shortlistChance = clamp(Math.round(readinessScore * 0.56 + avgSignal * 0.44), 20, 96);
-  const topPercentile = clamp(Math.round(100 - avgSignal * 0.72), 7, 95);
+  const shortlistChance = hasMeasuredBenchmarkData
+    ? clamp(Math.round(readinessScore * 0.56 + avgSignal * 0.44), 20, 96)
+    : null;
+  const topPercentile = hasMeasuredBenchmarkData
+    ? clamp(Math.round(100 - avgSignal * 0.72), 7, 95)
+    : null;
   const dsaPercentile = leetcodeData.stats
     ? clamp(Math.round(100 - lcSignal * 0.82), 5, 98)
     : null;

@@ -11,6 +11,7 @@ const manrope = Manrope({
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
